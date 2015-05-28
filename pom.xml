@@ -6,11 +6,11 @@
     <version>7</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <groupId>org.tomdz.maven</groupId>
+  <groupId>org.caltesting.maven</groupId>
   <artifactId>sphinx-maven-plugin</artifactId>
   <packaging>maven-plugin</packaging>
-  <version>1.0.4-SNAPSHOT</version>
-  <url>http://www.tomdz.org</url>
+  <version>3.0.0-SNAPSHOT</version>
+  <url>http://www.caltesting.org</url>
   <name>sphinx-maven</name>
   <description>Maven plugin that creates the site with Sphinx</description>
   <licenses>
@@ -26,14 +26,19 @@
       <name>Thomas Dudziak</name>
       <url>https://github.com/tomdz</url>
     </developer>
+    <developer>
+      <id>balasridhar</id>
+      <name>Bala Sridhar</name>
+      <url>https://github.com/balasridhar</url>
+    </developer>
   </developers>
   <scm>
-    <connection>scm:git:git://github.com/tomdz/sphinx-maven.git</connection>
-    <developerConnection>scm:git:git@github.com:tomdz/sphinx-maven.git</developerConnection>
-    <url>http://github.com/tomdz/sphinx-maven/tree/master</url>
+    <connection>scm:git:git://github.com/balasridhar/sphinx-maven.git</connection>
+    <developerConnection>scm:git:git@github.com:balasridhar/sphinx-maven.git</developerConnection>
+    <url>http://github.com/balasridhar/sphinx-maven/tree/master</url>
     <tag>HEAD</tag>
   </scm>
-  <distributionManagement>
+  <!-- <distributionManagement>
     <snapshotRepository>
       <id>sonatype-nexus-snapshots</id>
       <name>Sonatype Nexus Snapshots</name>
@@ -45,7 +50,7 @@
       <name>Nexus Release Repository</name>
       <url>http://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
     </repository>
-  </distributionManagement>
+  </distributionManagement> -->
 
   <dependencies>
     <dependency>
