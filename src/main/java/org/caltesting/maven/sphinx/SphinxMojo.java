@@ -1,4 +1,4 @@
-package org.tomdz.maven.sphinx;
+package org.caltesting.maven.sphinx;
 
 import java.io.File;
 import java.io.FileOutputStream;
