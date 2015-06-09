@@ -1,0 +1,12 @@
+--- sphinx/util/osutil.py	2015-06-09 16:19:19.988517000 -0500
++++ osutil.py	2015-06-09 16:27:48.546429250 -0500
+@@ -66,7 +66,8 @@
+ def ensuredir(path):
+     """Ensure that a path exists."""
+     try:
+-        os.makedirs(path)
++        if not os.path.exists(path):
++            os.makedirs(path)
+     except OSError as err:
+         # 0 for Jython/Win32
+         if err.errno not in [0, EEXIST]:

@@ -11,9 +11,7 @@ import org.python.core.PyObject;
 import org.python.core.PySystemState;
 import org.python.util.PythonInterpreter;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.Arrays;
 import java.util.List;
 
@@ -45,6 +43,7 @@ public class SphinxRunner {
      */
     public int runSphinx(List<String> args, File sphinxSourceDirectory) throws Exception {
         unpackSphinx(sphinxSourceDirectory);
+        unpackPlantUml(sphinxSourceDirectory);
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
 
@@ -59,9 +58,14 @@ public class SphinxRunner {
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
         Py.setSystemState(engineSys);
+
         log.debug("Path: " + engineSys.path.toString());
         log.debug("args: " + Arrays.toString(args.toArray()));
+        String plantumlExec = "plantuml = 'java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar'";
+        log.debug(plantumlExec);
+
         PythonInterpreter pi = new PythonInterpreter();
+        pi.exec(Py.newString(plantumlExec));
         pi.exec("from sphinx import main");
         PyObject sphinx = pi.get("main");
         PyObject ret = sphinx.__call__(Py.java2py(args));
@@ -100,6 +104,31 @@ public class SphinxRunner {
             input.close();
         } catch (Exception ex) {
             throw new MavenReportException("Could not unpack the sphinx source", ex);
+        }
+    }
+
+    /**
+     * Unpack PlantUML jar.
+     *
+     * @param sphinxSourceDirectory
+     * @throws MavenReportException
+     */
+    private void unpackPlantUml(File sphinxSourceDirectory) throws MavenReportException {
+        if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
+            throw new MavenReportException("Could not generate the temporary directory "
+                    + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
+        }
+        log.debug("Unpacking plantuml jar to " + sphinxSourceDirectory.getAbsolutePath());
+
+        try {
+            InputStream input = getClass().getResourceAsStream("/plantuml.8024.jar");
+            File outputFile = new File(sphinxSourceDirectory, "plantuml.jar");
+            OutputStream out = new FileOutputStream(outputFile);
+            IOUtils.copy(input, out);
+            out.close();
+            input.close();
+        } catch (Exception ex) {
+            throw new MavenReportException("Could not unpack the plant uml jar file.", ex);
         }
     }
 

@@ -19,10 +19,19 @@ pip install sphinx -t $PWD
 
 pip install rst2pdf -t $PWD
 
-#pip install javasphinx -t $PWD
+pip install javasphinx -t $PWD
 
-#pip install sphinxcontrib-plantuml -t $PWD
+pip install sphinxcontrib-plantuml -t $PWD
 
-zip -r ../sphinx.zip *
+find . -name "*.pyc" -delete
+find . -name "*.egg-info" | xargs rm -rf
+find . -name "*.dist-info" | xargs rm -rf
 
+# Patch osutil.py file to make it work with jython 2.7.0 version.
+patch -d sphinx/util -p0 < "$BASE_DIR/src/main/build/sphinx-osutil.patch"
+
+zip -9mrv ../sphinx.zip .
 mv ../sphinx.zip "$BASE_DIR/src/main/resources/"
+
+#cd ..
+#cp -R $SITE_PACKAGES "$BASE_DIR/src/main/resources/Lib/"
