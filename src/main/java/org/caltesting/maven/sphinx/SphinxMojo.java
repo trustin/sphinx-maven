@@ -18,7 +18,7 @@ import java.util.Locale;
 /**
  * Sphinx Mojo
  *
- * @author tomdz & balasridhar
+ * @author tomdz & Bala Sridhar
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
@@ -96,16 +96,15 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Override
     public void execute() throws MojoExecutionException {
         try {
-            if (verbose) {
-                getLog().info("Running sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
+            getLog().info("Running sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
                         + outputDirectory.getAbsolutePath());
-            }
 
-            String[] args = getSphinxRunnerCmdLine();
+            List<String> args = getSphinxRunnerCmdLine();
             int result;
             try {
-                result = sphinxRunner.runSphinx(args, sphinxSourceDirectory, verbose);
+                result = sphinxRunner.runSphinx(args, sphinxSourceDirectory);
             } catch (Exception ex) {
+                ex.printStackTrace();
                 throw new MavenReportException("Could not generate documentation", ex);
             }
             if (result != 0) {
@@ -170,7 +169,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      *
      * @return
      */
-    private String[] getSphinxRunnerCmdLine() {
+    private List<String> getSphinxRunnerCmdLine() {
         List<String> args = new ArrayList<String>();
 
         if (verbose) {
@@ -195,13 +194,15 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             }
         }
 
+        args.add("-n");
+
         args.add("-b");
         args.add(builder);
 
-        args.add("-n");
+
         args.add(sourceDirectory.getAbsolutePath());
         args.add(outputDirectory.getAbsolutePath() + File.separator + builder);
-        return args.toArray(new String[args.size()]);
+        return args;
     }
 
 }

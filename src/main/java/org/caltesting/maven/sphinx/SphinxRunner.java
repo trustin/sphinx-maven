@@ -1,16 +1,5 @@
 package org.caltesting.maven.sphinx;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
-
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;
@@ -18,7 +7,15 @@ import org.apache.commons.io.IOUtils;
 import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.reporting.MavenReportException;
 import org.python.core.Py;
+import org.python.core.PyObject;
 import org.python.core.PySystemState;
+import org.python.util.PythonInterpreter;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Sphinx Runner.
@@ -43,12 +40,11 @@ public class SphinxRunner {
      * Execute Sphinx Documentation Builder.
      * @param args
      * @param sphinxSourceDirectory
-     * @param verbose
      * @return
      * @throws Exception
      */
-    public int runSphinx(String[] args, File sphinxSourceDirectory, boolean verbose) throws Exception {
-        unpackSphinx(sphinxSourceDirectory, verbose);
+    public int runSphinx(List<String> args, File sphinxSourceDirectory) throws Exception {
+        unpackSphinx(sphinxSourceDirectory);
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
 
@@ -63,32 +59,29 @@ public class SphinxRunner {
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
         Py.setSystemState(engineSys);
-
-        ScriptEngine engine = new ScriptEngineManager().getEngineByName("python");
-
-        engine.put("args", args);
-        engine.eval("import sphinx");
-        return (Integer) engine.eval("sphinx.main(args)");
+        log.debug("Path: " + engineSys.path.toString());
+        log.debug("args: " + Arrays.toString(args.toArray()));
+        PythonInterpreter pi = new PythonInterpreter();
+        pi.exec("from sphinx import main");
+        PyObject sphinx = pi.get("main");
+        PyObject ret = sphinx.__call__(Py.java2py(args));
+        return (Integer) Py.tojava(ret, Integer.class);
     }
 
     /**
      * Unpack Sphinx Jar file.
      * @param sphinxSourceDirectory
-     * @param verbose
      * @throws MavenReportException
      */
-    private void unpackSphinx(File sphinxSourceDirectory, boolean verbose) throws MavenReportException {
+    private void unpackSphinx(File sphinxSourceDirectory) throws MavenReportException {
         if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
             throw new MavenReportException("Could not generate the temporary directory "
                     + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
         }
-
-        if (verbose) {
-            log.info("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
-        }
+        log.debug("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
         try {
-            ArchiveInputStream input = new ArchiveStreamFactory().createArchiveInputStream("jar",
-                    SphinxMojo.class.getResourceAsStream("/sphinx.jar"));
+            ArchiveInputStream input = new ArchiveStreamFactory().createArchiveInputStream("zip",
+                    getClass().getResourceAsStream("/sphinx.zip"));
             ArchiveEntry entry = input.getNextEntry();
 
             while (entry != null) {
