@@ -15,13 +15,18 @@ LANGUAGE=en_US
 mkdir -p $SITE_PACKAGES
 cd $SITE_PACKAGES
 
-pip install sphinx -t $PWD
+pip install sphinx -t $PWD --upgrade
 
-pip install rst2pdf -t $PWD
+pip install rst2pdf -t $PWD --upgrade
 
-pip install javasphinx -t $PWD
+pip install javasphinx -t $PWD --upgrade
 
-pip install sphinxcontrib-plantuml -t $PWD
+curl -O https://pypi.python.org/packages/source/s/sphinxcontrib-plantuml/sphinxcontrib-plantuml-0.5.tar.gz
+tar -xvf sphinxcontrib-plantuml-0.5.tar.gz --strip 1
+rm sphinxcontrib-plantuml-0.5.tar.gz
+
+# This does not work for sphinxcontrib-plantuml, because __init__.py is not available when installed using pip.
+#pip install sphinxcontrib-plantuml --download $PWD --upgrade
 
 find . -name "*.pyc" -delete
 find . -name "*.egg-info" | xargs rm -rf
