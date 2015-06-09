@@ -61,11 +61,11 @@ public class SphinxRunner {
 
         log.debug("Path: " + engineSys.path.toString());
         log.debug("args: " + Arrays.toString(args.toArray()));
-        String plantumlExec = "plantuml = 'java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar'";
-        log.debug(plantumlExec);
+        String plantumlExec = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
+        log.debug("PlantUml: " + plantumlExec);
 
         PythonInterpreter pi = new PythonInterpreter();
-        pi.exec(Py.newString(plantumlExec));
+        pi.set("plantuml", Py.newString(plantumlExec));
         pi.exec("from sphinx import main");
         PyObject sphinx = pi.get("main");
         PyObject ret = sphinx.__call__(Py.java2py(args));
