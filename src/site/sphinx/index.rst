@@ -14,6 +14,13 @@ has better support for multi-page documentation.
 
 The *sphinx-maven* plugin is BSD licensed just as Sphinx itself is.
 
+.. uml::
+
+   @startuml
+   Alice -> Bob: Hi!
+   Alice <- Bob: How are you?
+   @enduml
+
 .. toctree::
    :maxdepth: 2
 
