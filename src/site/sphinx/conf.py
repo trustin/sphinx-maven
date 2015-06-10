@@ -21,7 +21,8 @@ import sys, os
 
 needs_sphinx = '1.0'
 
-extensions = ['sphinx.ext.autodoc','rst2pdf.pdfbuilder','javasphinx', 'sphinxcontrib.plantuml']
+extensions = ['sphinx.ext.autodoc', 'rst2pdf.pdfbuilder', 'javasphinx', 'sphinxcontrib.plantuml']
+plantuml = os.getenv('plantuml')
 
 templates_path = ['_templates']
 

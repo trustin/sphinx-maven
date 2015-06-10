@@ -11,7 +11,10 @@ import org.python.core.PyObject;
 import org.python.core.PySystemState;
 import org.python.util.PythonInterpreter;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.List;
 
@@ -44,6 +47,7 @@ public class SphinxRunner {
     public int runSphinx(List<String> args, File sphinxSourceDirectory) throws Exception {
         unpackSphinx(sphinxSourceDirectory);
         unpackPlantUml(sphinxSourceDirectory);
+
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
 
@@ -55,21 +59,30 @@ public class SphinxRunner {
             throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
         }
 
+        String plantumlExec = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
+        log.debug("PlantUml: " + plantumlExec);
+
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
         Py.setSystemState(engineSys);
 
         log.debug("Path: " + engineSys.path.toString());
         log.debug("args: " + Arrays.toString(args.toArray()));
-        String plantumlExec = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
-        log.debug("PlantUml: " + plantumlExec);
 
         PythonInterpreter pi = new PythonInterpreter();
-        pi.set("plantuml", Py.newString(plantumlExec));
-        pi.exec("from sphinx import main");
-        PyObject sphinx = pi.get("main");
+
+        pi.exec("from os import putenv");
+        PyObject env = pi.get("putenv");
+        env.__call__(Py.java2py("plantuml"), Py.java2py(plantumlExec));
+
+        pi.exec("from sphinx import build_main");
+        PyObject sphinx = pi.get("build_main");
         PyObject ret = sphinx.__call__(Py.java2py(args));
-        return (Integer) Py.tojava(ret, Integer.class);
+        int result = (Integer) Py.tojava(ret, Integer.class);
+
+        pi.close();
+        pi.cleanup();
+        return result;
     }
 
     /**
