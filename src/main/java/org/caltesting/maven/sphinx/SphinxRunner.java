@@ -22,7 +22,7 @@ import java.util.List;
  * Sphinx Runner.
  *
  * @author Bala Sridhar & tomdz
- * @version
+ * @version June 12, 2015
  */
 public class SphinxRunner {
 

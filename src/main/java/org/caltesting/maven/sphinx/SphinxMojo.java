@@ -19,6 +19,7 @@ import java.util.Locale;
  * Sphinx Mojo
  *
  * @author tomdz & Bala Sridhar
+ * @version June 12, 2015
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
