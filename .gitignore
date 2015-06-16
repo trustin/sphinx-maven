@@ -7,3 +7,4 @@ tmp
 .classpath
 .project
 .settings
+src/site/sphinx/javadoc/**

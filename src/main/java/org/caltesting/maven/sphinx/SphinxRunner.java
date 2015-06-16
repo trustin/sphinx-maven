@@ -29,6 +29,9 @@ public class SphinxRunner {
     /** Mojo Logger. */
     private final Log log;
 
+    /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
+    private String PLANTUML_JAR;
+
     /**
      * Default Constructor.
      * @param log
@@ -38,15 +41,20 @@ public class SphinxRunner {
     }
 
     /**
-     * Execute Sphinx Documentation Builder.
-     * @param args
+     * Initialize Environment to execute the plugin.
+     *
      * @param sphinxSourceDirectory
-     * @return
-     * @throws Exception
      */
-    public int runSphinx(List<String> args, File sphinxSourceDirectory) throws Exception {
+    public void initEnv(File sphinxSourceDirectory) throws Exception {
+        if (sphinxSourceDirectory == null) {
+            throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
+        }
+
         unpackSphinx(sphinxSourceDirectory);
         unpackPlantUml(sphinxSourceDirectory);
+
+        PLANTUML_JAR = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
+        log.debug("PlantUml: " + PLANTUML_JAR);
 
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
@@ -55,38 +63,72 @@ public class SphinxRunner {
         // not sure if this setting has any effect on newer jython versions anymore
         System.setProperty("python.options.internalTablesImpl", "weak");
 
-        if (sphinxSourceDirectory == null) {
-            throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
-        }
-
-        String plantumlExec = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
-        log.debug("PlantUml: " + plantumlExec);
-
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
         Py.setSystemState(engineSys);
-
         log.debug("Path: " + engineSys.path.toString());
-        log.debug("args: " + Arrays.toString(args.toArray()));
+    }
 
+    /**
+     * Execute Python Script using Jython Python Interpreter.
+     *
+     * @param script to execute
+     * @param functionName the function name to which arguments have to be passed.
+     * @param args
+     * @param resultExpected
+     * @return
+     */
+    private int executePythonScript(String script, String functionName, List<String> args, boolean resultExpected) {
+        log.debug("args: " + Arrays.toString(args.toArray()));
         PythonInterpreter pi = new PythonInterpreter();
 
         pi.exec("from os import putenv");
         PyObject env = pi.get("putenv");
-        env.__call__(Py.java2py("plantuml"), Py.java2py(plantumlExec));
+        env.__call__(Py.java2py("plantuml"), Py.java2py(PLANTUML_JAR));
 
-        pi.exec("from sphinx import build_main");
-        PyObject sphinx = pi.get("build_main");
-        PyObject ret = sphinx.__call__(Py.java2py(args));
-        int result = (Integer) Py.tojava(ret, Integer.class);
+        pi.exec(script);
+        PyObject func = pi.get(functionName);
+        PyObject ret = func.__call__(Py.java2py(args));
+        int result = 0;
+        if (resultExpected) {
+            result = (Integer) Py.tojava(ret, Integer.class);
+        }
 
         pi.close();
         pi.cleanup();
+
         return result;
     }
 
     /**
-     * Unpack Sphinx Jar file.
+     * Execute Sphinx Documentation Builder.
+     *
+     * @param args
+     * @return
+     * @throws Exception
+     */
+    public int runSphinx(List<String> args) throws Exception {
+        String invokeSphinxScript = "from sphinx import build_main";
+        String functionName = "build_main";
+        return executePythonScript(invokeSphinxScript, functionName, args, true);
+    }
+
+    /**
+     * Exceute Java Sphinx Documentation Builder.
+     *
+     * @return
+     * @throws Exception
+     */
+    public int runJavaSphinx(List<String> args) throws Exception {
+        String invokeJavaSphinxScript = "from javasphinx.apidoc import main";
+        String functionName = "main";
+        return executePythonScript(invokeJavaSphinxScript, functionName, args, false);
+    }
+
+
+    /**
+     * Unpack Sphinx zip file.
+     *
      * @param sphinxSourceDirectory
      * @throws MavenReportException
      */

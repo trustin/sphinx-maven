@@ -84,6 +84,30 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Parameter(property = "sphinx.force", defaultValue = "false", required = true, alias = "force")
     private boolean force;
 
+    /**
+     * Whether Java Sphinx should generate output for all files instead of only the changed ones.
+     */
+    @Parameter(property = "javaSphinx.force", defaultValue = "false", required = true, alias = "javaSphinxForce")
+    private boolean javaSphinxForce;
+
+    /**
+     * Whether Java Sphinx should generate verbose output.
+     */
+    @Parameter(property = "javaSphinx.verbose", defaultValue = "true", required = true, alias = "javaSphinxVerbose")
+    private boolean javaSphinxVerbose;
+
+    /**
+     * Provide the location where Java Sphinx should copy the java docs created.
+     */
+    @Parameter(property = "javaSphinx.outputDir", defaultValue = "${sphinx.srcDir}/javadocs/", required = true)
+    private String javaSphinxOutputDir;
+
+    /**
+     * Provide the list of directories that needs to be scanned to generate javadocs.
+     */
+    @Parameter(property = "javaSphinx.includeDir", required = true)
+    private List<String> javaSphinxIncludeDir;
+
     /** Sphinx Executor. */
     private final SphinxRunner sphinxRunner;
 
@@ -97,13 +121,56 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Override
     public void execute() throws MojoExecutionException {
         try {
+            sphinxRunner.initEnv(sphinxSourceDirectory);
+        } catch (Exception ex) {
+            throw new MojoExecutionException("Failed to extract libraries.", ex);
+        }
+        runJavaSphinx();
+        executeSphinx();
+    }
+
+    /**
+     * Execute Java Sphinx
+     *
+     * @throws MojoExecutionException
+     */
+    private void runJavaSphinx() throws MojoExecutionException {
+        try {
+            List<String> args = getJavaSphinxCmdLine();
+            if (args == null || args.isEmpty()) {
+                return;
+            }
+            getLog().info("Running Java Sphinx, output will be placed in " + javaSphinxOutputDir);
+
+            int result;
+            try {
+                result = sphinxRunner.runJavaSphinx(args);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                throw new MavenReportException("Could not generate Java Sphinx documentation", ex);
+            }
+            if (result != 0) {
+                throw new MavenReportException("Java Sphinx report generation failed");
+            }
+        } catch (MavenReportException ex) {
+            throw new MojoExecutionException("Failed to run the report", ex);
+        }
+    }
+
+    /**
+     * Execute Sphinx
+     *
+     * @throws MojoExecutionException
+     */
+    private void executeSphinx() throws MojoExecutionException{
+        try {
             getLog().info("Running sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
-                        + outputDirectory.getAbsolutePath());
+                    + outputDirectory.getAbsolutePath());
 
             List<String> args = getSphinxRunnerCmdLine();
             int result;
             try {
-                result = sphinxRunner.runSphinx(args, sphinxSourceDirectory);
+                result = sphinxRunner.runSphinx(args);
             } catch (Exception ex) {
                 ex.printStackTrace();
                 throw new MavenReportException("Could not generate documentation", ex);
@@ -115,6 +182,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             throw new MojoExecutionException("Failed to run the report", ex);
         }
     }
+
 
     @Override
     public void generate(Sink sink, Locale locale) throws MavenReportException {
@@ -206,4 +274,31 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         return args;
     }
 
+    /**
+     * Build the Java Sphinx Command Line Options.
+     *
+     * @return
+     */
+    private List<String> getJavaSphinxCmdLine() {
+        List<String> javaSphinxArgs = new ArrayList<String>();
+
+        if (javaSphinxVerbose) {
+            javaSphinxArgs.add("-v");
+        }
+
+        if (javaSphinxForce) {
+            javaSphinxArgs.add("-f");
+        } else {
+            javaSphinxArgs.add("-u");
+        }
+
+        javaSphinxArgs.add("-o");
+        javaSphinxArgs.add(javaSphinxOutputDir);
+
+        for (String includeDir : javaSphinxIncludeDir) {
+            //javaSphinxArgs.add("-I");
+            javaSphinxArgs.add(includeDir);
+        }
+        return javaSphinxArgs;
+    }
 }

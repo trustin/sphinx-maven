@@ -21,6 +21,10 @@ pip install rst2pdf -t $PWD --upgrade
 
 pip install javasphinx -t $PWD --upgrade
 
+pip install html5lib -t $PWD --upgrade
+
+rm -Rf lxml*
+
 curl -O https://pypi.python.org/packages/source/s/sphinxcontrib-plantuml/sphinxcontrib-plantuml-0.5.tar.gz
 tar -xvf sphinxcontrib-plantuml-0.5.tar.gz --strip 1
 rm sphinxcontrib-plantuml-0.5.tar.gz
@@ -35,8 +39,8 @@ find . -name "*.dist-info" | xargs rm -rf
 # Patch osutil.py file to make it work with jython 2.7.0 version.
 patch -d sphinx/util -p0 < "$BASE_DIR/src/main/build/sphinx-osutil.patch"
 
+# Patch htmlrst.py file to use html5lib html parser library instead of lxml
+patch -d javasphinx -p0 < "$BASE_DIR/src/main/build/javasphinx-htmlrst.patch"
+
 zip -9mrv ../sphinx.zip .
 mv ../sphinx.zip "$BASE_DIR/src/main/resources/"
-
-#cd ..
-#cp -R $SITE_PACKAGES "$BASE_DIR/src/main/resources/Lib/"
