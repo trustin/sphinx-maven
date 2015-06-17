@@ -26,26 +26,26 @@ import java.util.List;
  */
 public class SphinxRunner {
 
-    /** Mojo Logger. */
-    private final Log log;
-
     /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
     private String PLANTUML_JAR;
 
+    /** Maven Logging Capability. */
+    private Log log;
+
     /**
      * Default Constructor.
-     * @param log
      */
-    public SphinxRunner(Log log) {
-        this.log = log;
+    public SphinxRunner() {
     }
 
     /**
      * Initialize Environment to execute the plugin.
      *
      * @param sphinxSourceDirectory
+     * @param log
      */
-    public void initEnv(File sphinxSourceDirectory) throws Exception {
+    public void initEnv(File sphinxSourceDirectory, Log log) throws Exception {
+        this.log = log;
         if (sphinxSourceDirectory == null) {
             throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
         }
@@ -78,7 +78,8 @@ public class SphinxRunner {
      * @param resultExpected
      * @return
      */
-    private int executePythonScript(String script, String functionName, List<String> args, boolean resultExpected) {
+    private int executePythonScript(String script, String functionName, List<String> args, boolean
+            resultExpected) {
         log.debug("args: " + Arrays.toString(args.toArray()));
         PythonInterpreter pi = new PythonInterpreter();
 

@@ -115,13 +115,13 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      * Default Constructor.
      */
     public SphinxMojo() {
-        sphinxRunner = new SphinxRunner(getLog());
+        sphinxRunner = new SphinxRunner();
     }
 
     @Override
     public void execute() throws MojoExecutionException {
         try {
-            sphinxRunner.initEnv(sphinxSourceDirectory);
+            sphinxRunner.initEnv(sphinxSourceDirectory, getLog());
         } catch (Exception ex) {
             throw new MojoExecutionException("Failed to extract libraries.", ex);
         }
@@ -164,9 +164,8 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      */
     private void executeSphinx() throws MojoExecutionException{
         try {
-            getLog().info("Running sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
+            getLog().info("Running Sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
                     + outputDirectory.getAbsolutePath());
-
             List<String> args = getSphinxRunnerCmdLine();
             int result;
             try {
@@ -195,22 +194,22 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
     @Override
     public String getOutputName() {
-        return "Sphinx";
+        return "Python-Sphinx";
     }
 
     @Override
     public String getCategoryName() {
-        return "Sphinx";
+        return "Documentation";
     }
 
     @Override
     public String getName(Locale locale) {
-        return "Sphinx";
+        return "Sphinx-Docs";
     }
 
     @Override
     public String getDescription(Locale locale) {
-        return "Sphinx";
+        return "Documentation using Python Sphinx Package";
     }
 
     @Override
