@@ -12,26 +12,24 @@
 
 .. _contents:
 
-Creating the documentation
-==========================
+Using the Plugin
+================
 
-First, create a folder ``src/site/sphinx``. This folder will contain the `reStructured Text`_ source files plus
-any additional things like themes and configuration. The name of the folder can be changed via options should
-you want a different folder.
+The *sphinx-maven* plugin looks for *.rst* files in the folder structure provided as part of plugin configuration
+within your pom file. The default location where the plugin will look for the files is ``src/site/sphinx``.
 
-Next, add the documentation. The `Sphinx first steps tutorial`_ gives a good introduction into the required
-tasks. Basically what you need is
+The folder specified will contain the `reStructured Text`_ source files plus any additional things like themes and
+configuration. The `Sphinx first steps tutorial`_ gives a good introduction into the required tasks. Basically what
+you need is
 
 * A configuration file called `conf.py`_ that defines the theme and other options (such as which output formats etc.)
 * The documentation files in reStructured Text format.
 * Additional files such as static files (images etc.), usually in a ``_static`` sub directory.
 * Optionally, a customized theme in a sub directory called ``_theme``
 
-For good examples of documentation, see `Sphinx' examples page`_.  The documentation for this plugin itself is
-based on the documentation for `Werkzeug`_ (documentation source for it can be found on `Werkzeug's github page`_)
-and `Celery`_ (documentation source can be found on `Celery's github page`_).
+For good examples of documentation, see `Sphinx' examples page`_.
 
-Running as part of the ``site`` lifecycle 
+Executing within ``site`` lifecycle
 =========================================
 
 Simply add the sphinx maven plugin to your ``pom.xml``::
@@ -49,32 +47,18 @@ Simply add the sphinx maven plugin to your ``pom.xml``::
           </reportSets>
         </plugin>
         <plugin>
-          <groupId>org.tomdz.maven</groupId>
+          <groupId>org.caltesting.maven</groupId>
           <artifactId>sphinx-maven-plugin</artifactId>
-          <version>1.0.1</version>
+          <version>3.0.0</version>
         </plugin>
       </plugins>
     </reporting>
 
-It is important that you set the ``reportSet`` attribute of the ``project-info-reports`` plugin to an empty set of
-``reports``. If not then the default ``about`` report will be generated which conflicts with the ``sphinx-maven``
-plugin, and in effect Sphinx will not be run.
+*Maven 3* changes how reporting plugins are specified. ::
 
-*Maven 3* changes how reporting plugins are specified. A ``profile`` can be used to define a ``pom.xml`` that can
-be used with both Maven 2 and Maven 3::
-
-    <profiles>
-      <profile>
-        <id>maven-3</id>
-        <activation>
-          <file>
-             <!--  This employs that the basedir expression is only recognized by Maven 3.x (see MNG-2363) -->
-            <exists>${basedir}</exists>
-          </file>
-        </activation>
-        <build>
-          <plugins>
-            <plugin>
+    <build>
+       <plugins>
+          <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-site-plugin</artifactId>
               <version>3.0</version>
@@ -91,20 +75,18 @@ be used with both Maven 2 and Maven 3::
                     </reportSets>
                   </plugin>
                   <plugin>
-                    <groupId>org.tomdz.maven</groupId>
+                    <groupId>org.caltesting.maven</groupId>
                     <artifactId>sphinx-maven-plugin</artifactId>
-                    <version>1.0.1</version>
+                    <version>3.0.0</version>
                   </plugin>
                 </reportPlugins>
               </configuration>
-            </plugin>
-          </plugins>        
-        </build>
-      </profile>
-    </profiles>
+          </plugin>
+       </plugins>
+    </build>
 
-The profile will only be activated if Maven 3 is used to generate the site. For more details about Maven 3
-and the site plugin see the `Maven 3 site plugin wiki page`_ and this `Maven 3 site plugin howto`_.
+For more details about Maven 3 and the site plugin see the `Maven 3 site plugin wiki page`_ and this `Maven 3 site
+plugin howto`_.
 
 Now all you need to do is to generate the documentation::
 
@@ -112,7 +94,7 @@ Now all you need to do is to generate the documentation::
 
 This will generate the documentation in the `target/site` folder.
 
-Running as part of the normal lifecycle 
+Executing within normal lifecycle
 =======================================
 
 You can also bind the plugin to a normal lifecycle phase. This is for instance useful if you want to generate a
@@ -128,9 +110,9 @@ A sample ``pom.xml`` plugin section could look like this::
       <plugins>
         ...
         <plugin>
-          <groupId>org.tomdz.maven</groupId>
+          <groupId>org.caltesting.maven</groupId>
           <artifactId>sphinx-maven-plugin</artifactId>
-          <version>1.0.1</version>
+          <version>3.0.0</version>
           <configuration>
             <outputDirectory>${project.build.directory}/docs</outputDirectory>
           </configuration>

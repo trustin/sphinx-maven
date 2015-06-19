@@ -22,45 +22,39 @@ import sys, os
 needs_sphinx = '1.0'
 
 extensions = ['sphinx.ext.autodoc', 'rst2pdf.pdfbuilder', 'javasphinx', 'sphinxcontrib.plantuml']
+
+# ---------- Options for PlantUML Integration ----------------
 plantuml = os.getenv('plantuml')
 
 templates_path = ['_templates']
-
 source_suffix = '.rst'
-
 source_encoding = 'utf-8-sig'
-
 master_doc = 'index'
 
 project = u'Sphinx-Maven'
-copyright = u'2011, Thomas Dudziak'
+copyright = u'2015, Bala Sridhar'
 
-version = '1.0.2'
-release = '1.0.2'
+version = '3.0.0'
+release = '3.0.0'
 
 exclude_trees = ['.build']
 
 add_function_parentheses = True
-
 pygments_style = 'trac'
-
 master_doc = 'index'
 
-# -- Options for HTML output ---------------------------------------------------
-sys.path.append(os.path.abspath('_themes'))
+# -- Options for HTML output ------------------
 
-html_theme = 'bootstrap'
+# Bootstrap Theme
+#sys.path.append(os.path.abspath('_themes'))
+#html_theme_path = ["_themes"]
+#html_static_path = ['_static']
+#html_theme = 'bootstrap'
 
-html_theme_path = ["_themes"]
-
+html_theme = 'pyramid'
 html_short_title = "Sphinx-Maven"
-
-html_static_path = ['_static']
-
 html_use_smartypants = True
-
 html_use_index = True
-
 htmlhelp_basename = 'sphinxmavendoc'
 
 html_sidebars = {
@@ -70,5 +64,16 @@ html_sidebars = {
 
 # -- Options for PDF output ---------------------------------------------------
 pdf_documents = [
-    ('index', u'Sphinx-Maven', u'Sphinx-Maven', u'Thomas Dudziak'),
+    ('index', u'Sphinx-Maven-Plugin', u'Sphinx-Maven-Plugin', u'Bala Sridhar'),
 ]
+
+# -------- Options for JavaSphinx -------------------------------
+javadoc_url_map = {
+    'java': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+    'javax': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+    'org.xml': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+    'org.w3c': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+    'org.apache.maven.plugin': ('http://maven.apache.org/plugin-tools/maven-plugin-plugin/apidocs/', 'javadoc'),
+    'org.apache.maven.reporting': ('https://maven.apache.org/shared/maven-reporting-api/apidocs/', 'javadoc'),
+    'org.codehaus.doxia.sink': ('http://maven.apache.org/doxia/doxia/doxia-sink-api/apidocs/', 'javadoc')
+}
