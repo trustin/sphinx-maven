@@ -87,25 +87,25 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     /**
      * Whether Java Sphinx should generate output for all files instead of only the changed ones.
      */
-    @Parameter(property = "javaSphinx.force", defaultValue = "false", required = true, alias = "javaSphinxForce")
+    @Parameter(property = "javaSphinx.force", defaultValue = "false", required = false, alias = "javaSphinxForce")
     private boolean javaSphinxForce;
 
     /**
      * Whether Java Sphinx should generate verbose output.
      */
-    @Parameter(property = "javaSphinx.verbose", defaultValue = "true", required = true, alias = "javaSphinxVerbose")
+    @Parameter(property = "javaSphinx.verbose", defaultValue = "true", required = false, alias = "javaSphinxVerbose")
     private boolean javaSphinxVerbose;
 
     /**
      * Provide the location where Java Sphinx should copy the java docs created.
      */
-    @Parameter(property = "javaSphinx.outputDir", defaultValue = "${sphinx.srcDir}/javadocs/", required = true)
+    @Parameter(property = "javaSphinx.outputDir", defaultValue = "${sphinx.srcDir}/javadocs/", required = false)
     private String javaSphinxOutputDir;
 
     /**
      * Provide the list of directories that needs to be scanned to generate javadocs.
      */
-    @Parameter(property = "javaSphinx.includeDir", required = true)
+    @Parameter(property = "javaSphinx.includeDir", required = false)
     private List<String> javaSphinxIncludeDir;
 
     /** Sphinx Executor. */
@@ -279,7 +279,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      * @return
      */
     private List<String> getJavaSphinxCmdLine() {
-        List<String> javaSphinxArgs = new ArrayList<String>();
+        // If the options are not specified then allow the process to continue.
+	if (javaSphinxOutputDir == null || javaSphinxIncludeDir == null || javaSphinxIncludeDir.isEmpty()) {
+		return null;
+	}
+	List<String> javaSphinxArgs = new ArrayList<String>();
 
         if (javaSphinxVerbose) {
             javaSphinxArgs.add("-v");
