@@ -280,10 +280,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      */
     private List<String> getJavaSphinxCmdLine() {
         // If the options are not specified then allow the process to continue.
-	if (javaSphinxOutputDir == null || javaSphinxIncludeDir == null || javaSphinxIncludeDir.isEmpty()) {
-		return null;
-	}
-	List<String> javaSphinxArgs = new ArrayList<String>();
+        if (javaSphinxOutputDir == null || javaSphinxIncludeDir == null || javaSphinxIncludeDir.isEmpty()) {
+            return null;
+        }
+
+        List<String> javaSphinxArgs = new ArrayList<String>();
 
         if (javaSphinxVerbose) {
             javaSphinxArgs.add("-v");
@@ -296,6 +297,9 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         }
 
         javaSphinxArgs.add("-o");
+        javaSphinxArgs.add(javaSphinxOutputDir);
+
+        javaSphinxArgs.add("-c");
         javaSphinxArgs.add(javaSphinxOutputDir);
 
         int count = 0;
