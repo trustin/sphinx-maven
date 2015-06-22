@@ -298,9 +298,13 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         javaSphinxArgs.add("-o");
         javaSphinxArgs.add(javaSphinxOutputDir);
 
+        int count = 0;
         for (String includeDir : javaSphinxIncludeDir) {
-            //javaSphinxArgs.add("-I");
+            if (count > 0) {
+                javaSphinxArgs.add("-I");
+            }
             javaSphinxArgs.add(includeDir);
+            count++;
         }
         return javaSphinxArgs;
     }
