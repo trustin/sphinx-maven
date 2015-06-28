@@ -40,12 +40,12 @@ find . -name "*.dist-info" | xargs rm -rf
 patch -d sphinx/util -p0 < "$BASE_DIR/src/main/build/sphinx-osutil.patch"
 
 # Patch htmlrst.py file to use html5lib html parser library instead of lxml
-patch -d javasphinx -p0 < "$BASE_DIR/src/main/build/javasphinx-htmlrst.patch"
+patch -d javasphinx -p0 < "$BASE_DIR/src/main/build/javasphinx.patch"
 
 zip -9mrv ../sphinx.zip .
 mv ../sphinx.zip "$BASE_DIR/src/main/resources/"
 
 # Now download plantuml v8024.
-curl -O http://downloads.sourceforge.net/project/plantuml/plantuml.8024.jar
-mv plantuml.8024.jar "$BASE_DIR/src/main/resources/"
+#curl -O http://downloads.sourceforge.net/project/plantuml/plantuml.8024.jar
+#mv plantuml.8024.jar "$BASE_DIR/src/main/resources/"
 

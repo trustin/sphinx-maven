@@ -296,6 +296,10 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             javaSphinxArgs.add("-u");
         }
 
+        // Specify the HTML Parsing Library used.
+        javaSphinxArgs.add("-p");
+        javaSphinxArgs.add("html5lib");
+
         javaSphinxArgs.add("-o");
         javaSphinxArgs.add(javaSphinxOutputDir);
 
