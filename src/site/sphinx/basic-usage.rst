@@ -49,7 +49,7 @@ Simply add the sphinx maven plugin to your ``pom.xml``::
         <plugin>
           <groupId>org.caltesting.maven</groupId>
           <artifactId>sphinx-maven-plugin</artifactId>
-          <version>3.0.0</version>
+          <version>3.1.0</version>
         </plugin>
       </plugins>
     </reporting>
@@ -77,7 +77,7 @@ Simply add the sphinx maven plugin to your ``pom.xml``::
                   <plugin>
                     <groupId>org.caltesting.maven</groupId>
                     <artifactId>sphinx-maven-plugin</artifactId>
-                    <version>3.0.0</version>
+                    <version>3.1.0</version>
                   </plugin>
                 </reportPlugins>
               </configuration>
@@ -112,7 +112,7 @@ A sample ``pom.xml`` plugin section could look like this::
         <plugin>
           <groupId>org.caltesting.maven</groupId>
           <artifactId>sphinx-maven-plugin</artifactId>
-          <version>3.0.0</version>
+          <version>3.1.0</version>
           <configuration>
             <outputDirectory>${project.build.directory}/docs</outputDirectory>
           </configuration>

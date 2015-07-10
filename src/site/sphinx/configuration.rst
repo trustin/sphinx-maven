@@ -2,6 +2,7 @@
 .. _`Sphinx tag documentation`: http://sphinx.pocoo.org/markup/misc.html#tags
 .. _`Jython`: http://www.jython.org/
 .. _`rst2pdf manual`: http://lateral.netmanagers.com.ar/static/manual.pdf
+.. _`GraphViz`: http://www.graphviz.org
 
 Configuration
 =============
@@ -36,7 +37,7 @@ by using the pdf builder, e.g.::
     <plugin>
       <groupId>org.caltesting.maven</groupId>
       <artifactId>sphinx-maven-plugin</artifactId>
-      <version>3.0.0</version>
+      <version>3.1.0</version>
       <configuration>
         <builder>pdf</builder>
         <outputDirectory>${project.reporting.outputDirectory}/pdf</outputDirectory>
@@ -66,7 +67,7 @@ arguments to the plugin configuration. e.g::
     <plugin>
       <groupId>org.caltesting.maven</groupId>
       <artifactId>sphinx-maven-plugin</artifactId>
-      <version>3.0.0</version>
+      <version>3.1.0</version>
       <configuration>
           <javaSphinxVerbose>true</javaSphinxVerbose>
           <javaSphinxIncludeDir>
@@ -89,7 +90,21 @@ Using PlantUML
 
 The ``sphinx-maven`` plugin has support for converting uml described using *PlantUML* text format within a *.rst* file
 to an image. It automatically references the image as part of the documentation in the appropriate place where the UML
-was defined in the reStructured Text source file.
+was defined in the reStructured Text source file. As mentioned before, PlantUML requires **GraphViz** to be installed 
+on the local machine. 
+
+GraphViz
+--------
+
+GraphViz is a software package of opensource tools for drawing graphs described in DOT language scripts. More information
+regarding `GraphViz`_ can be found in their website. Windows installer can be downloaded from the website and the package
+is available as part of package management provided by the individual operating system vendor.
+
+Remember this is required only for building html pages containing GraphViz generated images. You don't need this library 
+for hosting the generated documentation.
+
+PlantUML Config
+-----------------
 
 .. uml::
 
@@ -123,3 +138,67 @@ the plugin will use a fair amount of memory, especially PermGen space (a moderat
 of PermGen space). Therefore we suggest to either run maven with at least 256mb of heap and 128mb of PermGen space, e.g.
 
     MAVEN_OPTS="-Xmx256m -XX:MaxPermSize=128m" mvn site
+
+
+Sample Documentation Config
+=============================
+
+Sphinx looks at `conf.py` in the documentation source directory for building the final HTML or PDF file. This file contains 
+some basic settings for getting the desired output. The configuration used for generating the plugin documentation is given
+below:
+
+.. code-block:: python
+
+    import sys, os
+
+    needs_sphinx = '1.0'
+
+    extensions = ['sphinx.ext.autodoc', 'rst2pdf.pdfbuilder', 'javasphinx', 'sphinxcontrib.plantuml']
+
+    # ---------- Options for PlantUML Integration ----------------
+    plantuml = os.getenv('plantuml')
+
+    templates_path = ['_templates']
+    source_suffix = '.rst'
+    source_encoding = 'utf-8-sig'
+    master_doc = 'index'
+
+    project = u'Sphinx-Maven'
+    copyright = u'2015, Bala Sridhar'
+
+    version = '3.1.0'
+    release = '3.1.0'
+
+    exclude_trees = ['.build']
+
+    add_function_parentheses = True
+    pygments_style = 'trac'
+    master_doc = 'index'
+
+    # -- Options for HTML output ------------------
+    html_theme = 'pyramid'
+    html_short_title = "Sphinx-Maven"
+    html_use_smartypants = True
+    html_use_index = True
+    htmlhelp_basename = 'sphinxmavendoc'
+
+    html_sidebars = {
+        'index': ['globaltoc.html', 'relations.html', 'sidebarintro.html', 'searchbox.html'],
+        '**': ['globaltoc.html', 'relations.html', 'sidebarintro.html', 'searchbox.html']
+    }
+
+    # -- Options for PDF output ---------------------------------------------------
+    pdf_documents = [
+        ('index', u'Sphinx-Maven-Plugin', u'Sphinx-Maven-Plugin', u'Bala Sridhar'),
+    ]
+
+    # -------- Options for JavaSphinx -------------------------------
+    javadoc_url_map = {
+        'java': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+        'javax': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+        'org.xml': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+        'org.w3c': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
+        'org.apache.maven.plugin': ('http://maven.apache.org/plugin-tools/maven-plugin-plugin/apidocs/', 'javadoc'),
+        'org.apache.maven.reporting': ('https://maven.apache.org/shared/maven-reporting-api/apidocs/', 'javadoc'),
+        'org.codehaus.doxia.sink': ('http://maven.apache.org/doxia/doxia/doxia-sink-api/apidocs/', 'javadoc')
+    }

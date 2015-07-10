@@ -34,8 +34,8 @@ master_doc = 'index'
 project = u'Sphinx-Maven'
 copyright = u'2015, Bala Sridhar'
 
-version = '3.0.0'
-release = '3.0.0'
+version = '3.1.0'
+release = '3.1.0'
 
 exclude_trees = ['.build']
 
