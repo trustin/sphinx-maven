@@ -100,13 +100,13 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      * Provide the location where Java Sphinx should copy the java docs created.
      */
     @Parameter(property = "javaSphinx.outputDir", defaultValue = "${sphinx.srcDir}/javadocs/", required = false)
-    private String javaSphinxOutputDir;
+    private File javaSphinxOutputDir;
 
     /**
      * Provide the list of directories that needs to be scanned to generate javadocs.
      */
     @Parameter(property = "javaSphinx.includeDir", required = false)
-    private List<String> javaSphinxIncludeDir;
+    private List<File> javaSphinxIncludeDir;
 
     /** Sphinx Executor. */
     private final SphinxRunner sphinxRunner;
@@ -301,17 +301,17 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         javaSphinxArgs.add("html5lib");
 
         javaSphinxArgs.add("-o");
-        javaSphinxArgs.add(javaSphinxOutputDir);
+        javaSphinxArgs.add(javaSphinxOutputDir.getAbsolutePath());
 
         javaSphinxArgs.add("-c");
-        javaSphinxArgs.add(javaSphinxOutputDir);
+        javaSphinxArgs.add(javaSphinxOutputDir.getAbsolutePath());
 
         int count = 0;
-        for (String includeDir : javaSphinxIncludeDir) {
+        for (File includeDir : javaSphinxIncludeDir) {
             if (count > 0) {
                 javaSphinxArgs.add("-I");
             }
-            javaSphinxArgs.add(includeDir);
+            javaSphinxArgs.add(includeDir.getAbsolutePath());
             count++;
         }
         return javaSphinxArgs;
