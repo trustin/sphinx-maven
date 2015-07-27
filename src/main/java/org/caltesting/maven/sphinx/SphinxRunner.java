@@ -27,7 +27,7 @@ import java.util.List;
 public class SphinxRunner {
 
     /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
-    private String PLANTUML_JAR;
+    private String plantumlJar;
 
     /** Maven Logging Capability. */
     private static Log LOG;
@@ -53,8 +53,8 @@ public class SphinxRunner {
         unpackSphinx(sphinxSourceDirectory);
         unpackPlantUml(sphinxSourceDirectory);
 
-        PLANTUML_JAR = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
-        LOG.debug("PlantUml: " + PLANTUML_JAR);
+        plantumlJar = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
+        LOG.debug("PlantUml: " + plantumlJar);
 
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
@@ -85,7 +85,7 @@ public class SphinxRunner {
 
         pi.exec("from os import putenv");
         PyObject env = pi.get("putenv");
-        env.__call__(Py.java2py("plantuml"), Py.java2py(PLANTUML_JAR));
+        env.__call__(Py.java2py("plantuml"), Py.java2py(plantumlJar));
 
         pi.exec(script);
         PyObject func = pi.get(functionName);

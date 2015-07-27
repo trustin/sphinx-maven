@@ -24,18 +24,6 @@ import java.util.Locale;
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
     /**
-     * The maven project object.
-     */
-    //@Parameter(defaultValue = "${project}", required = true, readonly = true)
-    //private MavenProject project;
-
-    /**
-     * The base directory of the project.
-     */
-    //@Parameter(defaultValue = "${basedir}", required = true, readonly = true)
-    //private File basedir;
-
-    /**
      * The directory containing the sphinx doc source.
      */
     @Parameter(property = "sphinx.srcDir", defaultValue = "${basedir}/src/site/sphinx", required = true)
