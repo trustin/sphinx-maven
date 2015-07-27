@@ -30,7 +30,7 @@ public class SphinxRunner {
     private String PLANTUML_JAR;
 
     /** Maven Logging Capability. */
-    private Log log;
+    private static Log LOG;
 
     /**
      * Default Constructor.
@@ -44,8 +44,8 @@ public class SphinxRunner {
      * @param sphinxSourceDirectory
      * @param log
      */
-    public void initEnv(File sphinxSourceDirectory, Log log) throws Exception {
-        this.log = log;
+    public void initEnv(File sphinxSourceDirectory, Log log) throws MavenReportException {
+        this.LOG = log;
         if (sphinxSourceDirectory == null) {
             throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
         }
@@ -54,7 +54,7 @@ public class SphinxRunner {
         unpackPlantUml(sphinxSourceDirectory);
 
         PLANTUML_JAR = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
-        log.debug("PlantUml: " + PLANTUML_JAR);
+        LOG.debug("PlantUml: " + PLANTUML_JAR);
 
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
@@ -66,7 +66,7 @@ public class SphinxRunner {
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
         Py.setSystemState(engineSys);
-        log.debug("Path: " + engineSys.path.toString());
+        LOG.debug("Path: " + engineSys.path.toString());
     }
 
     /**
@@ -80,7 +80,7 @@ public class SphinxRunner {
      */
     private int executePythonScript(String script, String functionName, List<String> args, boolean
             resultExpected) {
-        log.debug("args: " + Arrays.toString(args.toArray()));
+        LOG.debug("args: " + Arrays.toString(args.toArray()));
         PythonInterpreter pi = new PythonInterpreter();
 
         pi.exec("from os import putenv");
@@ -106,9 +106,8 @@ public class SphinxRunner {
      *
      * @param args
      * @return
-     * @throws Exception
      */
-    public int runSphinx(List<String> args) throws Exception {
+    public int runSphinx(List<String> args) {
         String invokeSphinxScript = "from sphinx import build_main";
         String functionName = "build_main";
         return executePythonScript(invokeSphinxScript, functionName, args, true);
@@ -118,9 +117,8 @@ public class SphinxRunner {
      * Exceute Java Sphinx Documentation Builder.
      *
      * @return
-     * @throws Exception
      */
-    public int runJavaSphinx(List<String> args) throws Exception {
+    public int runJavaSphinx(List<String> args) {
         String invokeJavaSphinxScript = "from javasphinx.apidoc import main";
         String functionName = "main";
         return executePythonScript(invokeJavaSphinxScript, functionName, args, false);
@@ -138,7 +136,7 @@ public class SphinxRunner {
             throw new MavenReportException("Could not generate the temporary directory "
                     + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
         }
-        log.debug("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
+        LOG.debug("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
         try {
             ArchiveInputStream input = new ArchiveStreamFactory().createArchiveInputStream("zip",
                     getClass().getResourceAsStream("/sphinx.zip"));
@@ -174,7 +172,7 @@ public class SphinxRunner {
             throw new MavenReportException("Could not generate the temporary directory "
                     + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
         }
-        log.debug("Unpacking plantuml jar to " + sphinxSourceDirectory.getAbsolutePath());
+        LOG.debug("Unpacking plantuml jar to " + sphinxSourceDirectory.getAbsolutePath());
 
         try {
             InputStream input = getClass().getResourceAsStream("/plantuml.8024.jar");

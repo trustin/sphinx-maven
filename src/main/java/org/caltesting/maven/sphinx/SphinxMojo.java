@@ -26,14 +26,14 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     /**
      * The maven project object.
      */
-    @Parameter(defaultValue = "${project}", required = true, readonly = true)
-    private MavenProject project;
+    //@Parameter(defaultValue = "${project}", required = true, readonly = true)
+    //private MavenProject project;
 
     /**
      * The base directory of the project.
      */
-    @Parameter(defaultValue = "${basedir}", required = true, readonly = true)
-    private File basedir;
+    //@Parameter(defaultValue = "${basedir}", required = true, readonly = true)
+    //private File basedir;
 
     /**
      * The directory containing the sphinx doc source.
@@ -137,20 +137,13 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private void runJavaSphinx() throws MojoExecutionException {
         try {
             List<String> args = getJavaSphinxCmdLine();
-            if (args == null || args.isEmpty()) {
+            if (args.isEmpty()) {
                 return;
             }
             getLog().info("Running Java Sphinx, output will be placed in " + javaSphinxOutputDir);
 
-            int result;
-            try {
-                result = sphinxRunner.runJavaSphinx(args);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                throw new MavenReportException("Could not generate Java Sphinx documentation", ex);
-            }
-            if (result != 0) {
-                throw new MavenReportException("Java Sphinx report generation failed");
+            if (sphinxRunner.runJavaSphinx(args) != 0) {
+                throw new MavenReportException("Java Sphinx report generation failed.");
             }
         } catch (MavenReportException ex) {
             throw new MojoExecutionException("Failed to run the report", ex);
@@ -167,14 +160,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             getLog().info("Running Sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
                     + outputDirectory.getAbsolutePath());
             List<String> args = getSphinxRunnerCmdLine();
-            int result;
-            try {
-                result = sphinxRunner.runSphinx(args);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                throw new MavenReportException("Could not generate documentation", ex);
-            }
-            if (result != 0) {
+            if (sphinxRunner.runSphinx(args) != 0) {
                 throw new MavenReportException("Sphinx report generation failed");
             }
         } catch (MavenReportException ex) {
@@ -279,12 +265,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      * @return
      */
     private List<String> getJavaSphinxCmdLine() {
+        List<String> javaSphinxArgs = new ArrayList<String>();
         // If the options are not specified then allow the process to continue.
         if (javaSphinxOutputDir == null || javaSphinxIncludeDir == null || javaSphinxIncludeDir.isEmpty()) {
-            return null;
+            return javaSphinxArgs;
         }
-
-        List<String> javaSphinxArgs = new ArrayList<String>();
 
         if (javaSphinxVerbose) {
             javaSphinxArgs.add("-v");
