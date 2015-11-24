@@ -1,4 +1,4 @@
-package org.caltesting.maven.sphinx;
+package kr.motd.maven.sphinx;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;

@@ -1,4 +1,4 @@
-package org.caltesting.maven.sphinx;
+package kr.motd.maven.sphinx;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
