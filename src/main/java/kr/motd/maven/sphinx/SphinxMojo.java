@@ -1,5 +1,10 @@
 package kr.motd.maven.sphinx;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -9,11 +14,6 @@ import org.apache.maven.reporting.MavenReport;
 import org.apache.maven.reporting.MavenReportException;
 import org.codehaus.doxia.sink.Sink;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
 /**
  * Sphinx Mojo
  *
@@ -22,6 +22,7 @@ import java.util.Locale;
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
+
     /**
      * The directory containing the sphinx doc source.
      */
@@ -112,8 +113,13 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         } catch (Exception ex) {
             throw new MojoExecutionException("Failed to extract libraries.", ex);
         }
-        runJavaSphinx();
-        executeSphinx();
+
+        try {
+            runJavaSphinx();
+            executeSphinx();
+        } finally {
+            sphinxRunner.destroy();
+        }
     }
 
     /**
@@ -150,18 +156,20 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             if (sphinxRunner.runSphinx(args) != 0) {
                 throw new MavenReportException("Sphinx report generation failed");
             }
-        } catch (MavenReportException ex) {
-            throw new MojoExecutionException("Failed to run the report", ex);
+        } catch (Exception t) {
+            throw new MojoExecutionException("Failed to run the report", t);
         }
     }
 
 
     @Override
-    public void generate(Sink sink, Locale locale) throws MavenReportException {
+    public void generate(
+            @SuppressWarnings("deprecation") Sink sink, Locale locale) throws MavenReportException {
+
         try {
-            this.execute();
-        } catch (Exception ex) {
-            throw new MavenReportException("Error Generating Report", ex);
+            execute();
+        } catch (Exception e) {
+            throw new MavenReportException("Error generating a Sphinx report:", e);
         }
     }
 
@@ -192,7 +200,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
     @Override
     public File getReportOutputDirectory() {
-        return this.outputDirectory;
+        return outputDirectory;
     }
 
     @Override
@@ -207,11 +215,9 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
     /**
      * Build the Sphinx Command line options.
-     *
-     * @return
      */
     private List<String> getSphinxRunnerCmdLine() {
-        List<String> args = new ArrayList<String>();
+        List<String> args = new ArrayList<>();
 
         if (verbose) {
             args.add("-v");
@@ -240,19 +246,17 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         args.add("-b");
         args.add(builder);
 
-
         args.add(sourceDirectory.getAbsolutePath());
         args.add(outputDirectory.getAbsolutePath() + File.separator + builder);
+
         return args;
     }
 
     /**
      * Build the Java Sphinx Command Line Options.
-     *
-     * @return
      */
     private List<String> getJavaSphinxCmdLine() {
-        List<String> javaSphinxArgs = new ArrayList<String>();
+        List<String> javaSphinxArgs = new ArrayList<>();
         // If the options are not specified then allow the process to continue.
         if (javaSphinxOutputDir == null || javaSphinxIncludeDir == null || javaSphinxIncludeDir.isEmpty()) {
             return javaSphinxArgs;

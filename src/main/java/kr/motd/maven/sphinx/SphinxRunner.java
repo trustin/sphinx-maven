@@ -1,22 +1,26 @@
 package kr.motd.maven.sphinx;
 
-import org.apache.commons.compress.archivers.ArchiveEntry;
-import org.apache.commons.compress.archivers.ArchiveInputStream;
-import org.apache.commons.compress.archivers.ArchiveStreamFactory;
-import org.apache.commons.io.IOUtils;
-import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.reporting.MavenReportException;
-import org.python.core.Py;
-import org.python.core.PyObject;
-import org.python.core.PySystemState;
-import org.python.util.PythonInterpreter;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.ArchiveInputStream;
+import org.apache.commons.compress.archivers.ArchiveStreamFactory;
+import org.apache.commons.io.IOUtils;
+import org.apache.maven.plugin.logging.Log;
+import org.apache.maven.project.MavenProject;
+import org.apache.maven.reporting.MavenReportException;
+import org.python.core.Py;
+import org.python.core.PyDictionary;
+import org.python.core.PyObject;
+import org.python.core.PySystemState;
+import org.python.util.PythonInterpreter;
 
 /**
  * Sphinx Runner.
@@ -30,22 +34,13 @@ public class SphinxRunner {
     private String plantumlJar;
 
     /** Maven Logging Capability. */
-    private static Log LOG;
-
-    /**
-     * Default Constructor.
-     */
-    public SphinxRunner() {
-    }
+    private Log log;
 
     /**
      * Initialize Environment to execute the plugin.
-     *
-     * @param sphinxSourceDirectory
-     * @param log
      */
     public void initEnv(File sphinxSourceDirectory, Log log) throws MavenReportException {
-        this.LOG = log;
+        this.log = log;
         if (sphinxSourceDirectory == null) {
             throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
         }
@@ -54,7 +49,7 @@ public class SphinxRunner {
         unpackPlantUml(sphinxSourceDirectory);
 
         plantumlJar = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
-        LOG.debug("PlantUml: " + plantumlJar);
+        log.debug("PlantUml: " + plantumlJar);
 
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
@@ -66,7 +61,11 @@ public class SphinxRunner {
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
         Py.setSystemState(engineSys);
-        LOG.debug("Path: " + engineSys.path.toString());
+        log.debug("Path: " + engineSys.path);
+    }
+
+    void destroy() {
+        Py.getSystemState().cleanup();
     }
 
     /**
@@ -74,25 +73,37 @@ public class SphinxRunner {
      *
      * @param script to execute
      * @param functionName the function name to which arguments have to be passed.
-     * @param args
-     * @param resultExpected
-     * @return
      */
-    private int executePythonScript(String script, String functionName, List<String> args, boolean
-            resultExpected) {
-        LOG.debug("args: " + Arrays.toString(args.toArray()));
+    private int executePythonScript(
+            String script, String functionName, List<String> args, boolean resultExpected) {
+
+        log.debug("args: " + Arrays.toString(args.toArray()));
+
         PythonInterpreter pi = new PythonInterpreter();
 
+        // Set some necessary environment variables.
         pi.exec("from os import putenv");
         PyObject env = pi.get("putenv");
+
+        // Set the locale for consistency.
+        env.__call__(Py.java2py("LANG"), Py.java2py("en_US.UTF-8"));
+        env.__call__(Py.java2py("LC_ALL"), Py.java2py("en_US.UTF-8"));
+
+        // Set the command that runs PlantUML.
         env.__call__(Py.java2py("plantuml"), Py.java2py(plantumlJar));
 
+        // babel/localtime/_unix.py attempts to use os.readlink() which is unavailable in some OSes.
+        // Setting the 'TZ' environment variable works around this problem.
+        env.__call__(Py.java2py("TZ"), Py.java2py("UTC"));
+
+        // Execute the script, finally.
         pi.exec(script);
+
         PyObject func = pi.get(functionName);
         PyObject ret = func.__call__(Py.java2py(args));
         int result = 0;
         if (resultExpected) {
-            result = (Integer) Py.tojava(ret, Integer.class);
+            result = Py.tojava(ret, Integer.class);
         }
 
         pi.close();
@@ -103,9 +114,6 @@ public class SphinxRunner {
 
     /**
      * Execute Sphinx Documentation Builder.
-     *
-     * @param args
-     * @return
      */
     public int runSphinx(List<String> args) {
         String invokeSphinxScript = "from sphinx import build_main";
@@ -115,8 +123,6 @@ public class SphinxRunner {
 
     /**
      * Exceute Java Sphinx Documentation Builder.
-     *
-     * @return
      */
     public int runJavaSphinx(List<String> args) {
         String invokeJavaSphinxScript = "from javasphinx.apidoc import main";
@@ -127,16 +133,13 @@ public class SphinxRunner {
 
     /**
      * Unpack Sphinx zip file.
-     *
-     * @param sphinxSourceDirectory
-     * @throws MavenReportException
      */
     private void unpackSphinx(File sphinxSourceDirectory) throws MavenReportException {
         if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
             throw new MavenReportException("Could not generate the temporary directory "
                     + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
         }
-        LOG.debug("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
+        log.debug("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
         try {
             ArchiveInputStream input = new ArchiveStreamFactory().createArchiveInputStream("zip",
                     getClass().getResourceAsStream("/sphinx.zip"));
@@ -163,16 +166,13 @@ public class SphinxRunner {
 
     /**
      * Unpack PlantUML jar.
-     *
-     * @param sphinxSourceDirectory
-     * @throws MavenReportException
      */
     private void unpackPlantUml(File sphinxSourceDirectory) throws MavenReportException {
         if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
             throw new MavenReportException("Could not generate the temporary directory "
                     + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
         }
-        LOG.debug("Unpacking plantuml jar to " + sphinxSourceDirectory.getAbsolutePath());
+        log.debug("Unpacking plantuml jar to " + sphinxSourceDirectory.getAbsolutePath());
 
         try {
             InputStream input = getClass().getResourceAsStream("/plantuml.8024.jar");
@@ -185,5 +185,4 @@ public class SphinxRunner {
             throw new MavenReportException("Could not unpack the plant uml jar file.", ex);
         }
     }
-
 }
