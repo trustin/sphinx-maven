@@ -4,23 +4,24 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.security.CodeSource;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Enumeration;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
-import org.apache.commons.compress.archivers.ArchiveEntry;
-import org.apache.commons.compress.archivers.ArchiveInputStream;
-import org.apache.commons.compress.archivers.ArchiveStreamFactory;
-import org.apache.commons.io.IOUtils;
 import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.project.MavenProject;
 import org.apache.maven.reporting.MavenReportException;
 import org.python.core.Py;
-import org.python.core.PyDictionary;
 import org.python.core.PyObject;
 import org.python.core.PySystemState;
 import org.python.util.PythonInterpreter;
+
+import net.sourceforge.plantuml.UmlDiagram;
 
 /**
  * Sphinx Runner.
@@ -30,8 +31,10 @@ import org.python.util.PythonInterpreter;
  */
 public class SphinxRunner {
 
+    private static final String DIST_PREFIX = "kr/motd/maven/sphinx/dist/";
+
     /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
-    private String plantumlJar;
+    private String plantUmlCommand;
 
     /** Maven Logging Capability. */
     private Log log;
@@ -46,10 +49,10 @@ public class SphinxRunner {
         }
 
         unpackSphinx(sphinxSourceDirectory);
-        unpackPlantUml(sphinxSourceDirectory);
+        final File plantUmlJar = findPlantUmlJar();
 
-        plantumlJar = "java -jar " + sphinxSourceDirectory.getAbsolutePath() + "/plantuml.jar";
-        log.debug("PlantUml: " + plantumlJar);
+        plantUmlCommand = "java -jar " + plantUmlJar.getPath().replace("\\", "\\\\");
+        log.debug("PlantUML command: " + plantUmlCommand);
 
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
@@ -59,7 +62,7 @@ public class SphinxRunner {
         System.setProperty("python.options.internalTablesImpl", "weak");
 
         PySystemState engineSys = new PySystemState();
-        engineSys.path.append(Py.newString(sphinxSourceDirectory.getAbsolutePath()));
+        engineSys.path.append(Py.newString(sphinxSourceDirectory.getPath()));
         Py.setSystemState(engineSys);
         log.debug("Path: " + engineSys.path);
     }
@@ -90,7 +93,7 @@ public class SphinxRunner {
         env.__call__(Py.java2py("LC_ALL"), Py.java2py("en_US.UTF-8"));
 
         // Set the command that runs PlantUML.
-        env.__call__(Py.java2py("plantuml"), Py.java2py(plantumlJar));
+        env.__call__(Py.java2py("plantuml"), Py.java2py(plantUmlCommand));
 
         // babel/localtime/_unix.py attempts to use os.readlink() which is unavailable in some OSes.
         // Setting the 'TZ' environment variable works around this problem.
@@ -122,67 +125,103 @@ public class SphinxRunner {
     }
 
     /**
-     * Exceute Java Sphinx Documentation Builder.
-     */
-    public int runJavaSphinx(List<String> args) {
-        String invokeJavaSphinxScript = "from javasphinx.apidoc import main";
-        String functionName = "main";
-        return executePythonScript(invokeJavaSphinxScript, functionName, args, false);
-    }
-
-
-    /**
      * Unpack Sphinx zip file.
      */
     private void unpackSphinx(File sphinxSourceDirectory) throws MavenReportException {
         if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
             throw new MavenReportException("Could not generate the temporary directory "
-                    + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
+                    + sphinxSourceDirectory + " for the sphinx sources");
         }
-        log.debug("Unpacking sphinx to " + sphinxSourceDirectory.getAbsolutePath());
-        try {
-            ArchiveInputStream input = new ArchiveStreamFactory().createArchiveInputStream("zip",
-                    getClass().getResourceAsStream("/sphinx.zip"));
-            ArchiveEntry entry = input.getNextEntry();
+        log.debug("Unpacking sphinx to " + sphinxSourceDirectory);
 
-            while (entry != null) {
-                File archiveEntry = new File(sphinxSourceDirectory, entry.getName());
-                archiveEntry.getParentFile().mkdirs();
-                if (entry.isDirectory()) {
-                    archiveEntry.mkdir();
-                    entry = input.getNextEntry();
+        try {
+            final JarFile jar = new JarFile(findPluginJar(), false);
+            final byte[] buf = new byte[65536];
+            for (Enumeration<JarEntry> i = jar.entries(); i.hasMoreElements();) {
+                final JarEntry e = i.nextElement();
+                if (!e.getName().startsWith(DIST_PREFIX)) {
                     continue;
                 }
-                OutputStream out = new FileOutputStream(archiveEntry);
-                IOUtils.copy(input, out);
-                out.close();
-                entry = input.getNextEntry();
+
+                final File f = new File(sphinxSourceDirectory + File.separator +
+                                        e.getName().substring(DIST_PREFIX.length()));
+
+                if (e.isDirectory()) {
+                    if (!f.mkdirs() && !f.exists()) {
+                        throw new MavenReportException("failed to create a directory: " + f);
+                    }
+                    continue;
+                }
+
+                if (f.exists()) {
+                    if (f.length() == e.getSize()) {
+                        // Very likely that the entry has been extracted in a previous run.
+                        continue;
+                    }
+
+                    if (!f.delete()) {
+                        throw new MavenReportException("failed to delete a file: " + f);
+                    }
+                }
+
+                final File tmpF = new File(f.getParentFile(), ".tmp-" + f.getName());
+                boolean success = false;
+                try (InputStream in = jar.getInputStream(e);
+                     OutputStream out = new FileOutputStream(tmpF)) {
+
+                    for (;;) {
+                        int readBytes = in.read(buf);
+                        if (readBytes < 0) {
+                            break;
+                        }
+                        out.write(buf, 0, readBytes);
+                    }
+
+                    success = true;
+                } finally {
+                    if (!success) {
+                        tmpF.delete();
+                    }
+                }
+
+                if (!tmpF.renameTo(f)) {
+                    throw new MavenReportException("failed to rename a file: " + tmpF + " -> " + f.getName());
+                }
             }
-            input.close();
         } catch (Exception ex) {
             throw new MavenReportException("Could not unpack the sphinx source", ex);
         }
     }
 
-    /**
-     * Unpack PlantUML jar.
-     */
-    private void unpackPlantUml(File sphinxSourceDirectory) throws MavenReportException {
-        if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
-            throw new MavenReportException("Could not generate the temporary directory "
-                    + sphinxSourceDirectory.getAbsolutePath() + " for the sphinx sources");
-        }
-        log.debug("Unpacking plantuml jar to " + sphinxSourceDirectory.getAbsolutePath());
+    private File findPluginJar() throws MavenReportException {
+        return findJar(SphinxRunner.class, "the plugin JAR");
+    }
 
-        try {
-            InputStream input = getClass().getResourceAsStream("/plantuml.8024.jar");
-            File outputFile = new File(sphinxSourceDirectory, "plantuml.jar");
-            OutputStream out = new FileOutputStream(outputFile);
-            IOUtils.copy(input, out);
-            out.close();
-            input.close();
-        } catch (Exception ex) {
-            throw new MavenReportException("Could not unpack the plant uml jar file.", ex);
+    private File findPlantUmlJar() throws MavenReportException {
+        return findJar(UmlDiagram.class, "PlantUML JAR");
+    }
+
+    private File findJar(Class<?> type, String name) throws MavenReportException {
+        final CodeSource codeSource = type.getProtectionDomain().getCodeSource();
+        if (codeSource == null) {
+            throw new MavenReportException(
+                    "failed to get the location of " + name + " (CodeSource not available)");
         }
+
+        final URL url = codeSource.getLocation();
+        log.debug(name + ": " + url);
+        if (!"file".equals(url.getProtocol()) || !url.getPath().toLowerCase(Locale.US).endsWith(".jar")) {
+            throw new MavenReportException(
+                    "failed to get the location of " + name + " (unexpected URL: " + url + ')');
+        }
+
+        File f;
+        try {
+            f = new File(url.toURI());
+        } catch (URISyntaxException ignored) {
+            f = new File(url.getPath());
+        }
+
+        return f;
     }
 }

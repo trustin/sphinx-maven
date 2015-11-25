@@ -18,16 +18,17 @@
 # -*- coding: utf-8 -*-
 
 import sys, os
+from recommonmark.parser import CommonMarkParser
 
 needs_sphinx = '1.0'
 
-extensions = ['sphinx.ext.autodoc', 'rst2pdf.pdfbuilder', 'javasphinx', 'sphinxcontrib.plantuml']
+extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
 
 # ---------- Options for PlantUML Integration ----------------
 plantuml = os.getenv('plantuml')
 
 templates_path = ['_templates']
-source_suffix = '.rst'
+source_suffix = ['.rst', '.md']
 source_encoding = 'utf-8-sig'
 master_doc = 'index'
 
@@ -43,13 +44,11 @@ add_function_parentheses = True
 pygments_style = 'trac'
 master_doc = 'index'
 
-# -- Options for HTML output ------------------
+source_parsers = {
+    '.md': CommonMarkParser
+}
 
-# Bootstrap Theme
-#sys.path.append(os.path.abspath('_themes'))
-#html_theme_path = ["_themes"]
-#html_static_path = ['_static']
-#html_theme = 'bootstrap'
+# -- Options for HTML output ------------------
 
 html_theme = 'pyramid'
 html_short_title = "Sphinx-Maven"
@@ -62,18 +61,3 @@ html_sidebars = {
     '**': ['globaltoc.html', 'relations.html', 'sidebarintro.html', 'searchbox.html']
 }
 
-# -- Options for PDF output ---------------------------------------------------
-pdf_documents = [
-    ('index', u'Sphinx-Maven-Plugin', u'Sphinx-Maven-Plugin', u'Bala Sridhar'),
-]
-
-# -------- Options for JavaSphinx -------------------------------
-javadoc_url_map = {
-    'java': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-    'javax': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-    'org.xml': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-    'org.w3c': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-    'org.apache.maven.plugin': ('http://maven.apache.org/plugin-tools/maven-plugin-plugin/apidocs/', 'javadoc'),
-    'org.apache.maven.reporting': ('https://maven.apache.org/shared/maven-reporting-api/apidocs/', 'javadoc'),
-    'org.codehaus.doxia.sink': ('http://maven.apache.org/doxia/doxia/doxia-sink-api/apidocs/', 'javadoc')
-}

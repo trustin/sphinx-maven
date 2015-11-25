@@ -1,7 +1,6 @@
 .. _`Sphinx commandline documentation`: http://sphinx.pocoo.org/man/sphinx-build.html?highlight=command%20line
 .. _`Sphinx tag documentation`: http://sphinx.pocoo.org/markup/misc.html#tags
 .. _`Jython`: http://www.jython.org/
-.. _`rst2pdf manual`: http://lateral.netmanagers.com.ar/static/manual.pdf
 .. _`GraphViz`: http://www.graphviz.org
 
 Configuration
@@ -22,68 +21,7 @@ Parameter                Description                                            
 ``warningsAsErrors``     Whether warnings should be treated as errors.                                                     ``false``
 ``force``                Whether Sphinx should generate output for all files instead of only the changed ones.             ``false``
 ``tags``                 Additional tags to pass to Sphinx. See the `Sphinx tag documentation`_ for more information.
-``javaSphinxIncludeDir`` The directory containing the Java Source files.
-``javaSphinxOutputDir``  The directory where the generated output will be placed.                                          ``${sourceDirectory}/javadocs/``
-``javaSphinxVerbose``    Whether JavaSphinx should generate verbose output.                                                ``true``
-``javaSphinxForce``      Whether JavaSphinx should generate output for all files instead of only the changed ones.         ``false``
 ======================== ================================================================================================= ========================================
-
-Building PDFs
-=============
-
-The ``sphinx-maven`` plugin has experimental support for PDF generation. You'll turn it on
-by using the pdf builder, e.g.::
-
-    <plugin>
-      <groupId>org.caltesting.maven</groupId>
-      <artifactId>sphinx-maven-plugin</artifactId>
-      <version>3.1.0</version>
-      <configuration>
-        <builder>pdf</builder>
-        <outputDirectory>${project.reporting.outputDirectory}/pdf</outputDirectory>
-      </configuration>
-    </plugin>
-
-You'll likely also have to add some additional configuration options to your ``conf.py``
-file (usually in ``src/site/sphinx``) to tell the pdf builder what to do. At a minimum
-you'll probably need to point it to the index page by adding this to the end::
-
-    # -- Options for PDF output ---------------------------------------------------
-    pdf_documents = [
-        ('index', u'<file name>', u'<document name>', u'<author>'),
-    ]
-
-For additional options see the Sphinx section of the `rst2pdf manual`_.
-
-Please note that alpha channels in the images (i.e. PNGs) are not supported, and will be replaced with
-black pixels. This is most likely not what you want, so please don't use alpha channels in the images.
-
-Building JavaDocs
-==================
-
-The ``sphinx-maven`` plugin has support for JavaDocs generation. You can turn it on by passing the necessary
-arguments to the plugin configuration. e.g::
-
-    <plugin>
-      <groupId>org.caltesting.maven</groupId>
-      <artifactId>sphinx-maven-plugin</artifactId>
-      <version>3.1.0</version>
-      <configuration>
-          <javaSphinxVerbose>true</javaSphinxVerbose>
-          <javaSphinxIncludeDir>
-              <entry>${basedir}/src/main/java/</entry>
-          </javaSphinxIncludeDir>
-          <javaSphinxOutputDir>${basedir}/src/site/sphinx/javadoc/</javaSphinxOutputDir>
-      </configuration>
-    </plugin>
-
-You will need to add some additional configuration options to your ``conf.py`` file
-(usually in ``src/site/sphinx``) to tell Sphinx how to interpret the JavaSphinx generated *.rst* files.
-You will have to add 'javasphinx' as an extension within the extension's list defined within ``conf.py``.
-
-Please note that the output directory for *javasphinx* generated documentation should be within the *sourceDirectory*
-folder structure specified for *Sphinx* configuration. So that *Sphinx* knows to also include these files as well when
-generating the html/pdf output.
 
 Using PlantUML
 ===============
@@ -111,7 +49,7 @@ PlantUML Config
     @startuml
     state pluginBuildProcess {
         [*] -> buildJavaDocs
-        buildJavaDocs: Using JavaSphinx
+        buildJavaDocs: Using maven-javadoc-plugin
         buildJavaDocs -> buildSphinxDocs
         buildSphinxDocs: Using Sphinx and other extensions as needed.
         buildSphinxDocs -> [*]
@@ -143,7 +81,7 @@ of PermGen space). Therefore we suggest to either run maven with at least 256mb 
 Sample Documentation Config
 =============================
 
-Sphinx looks at `conf.py` in the documentation source directory for building the final HTML or PDF file. This file contains 
+Sphinx looks at `conf.py` in the documentation source directory for building the final HTML file. This file contains 
 some basic settings for getting the desired output. The configuration used for generating the plugin documentation is given
 below:
 
@@ -153,7 +91,7 @@ below:
 
     needs_sphinx = '1.0'
 
-    extensions = ['sphinx.ext.autodoc', 'rst2pdf.pdfbuilder', 'javasphinx', 'sphinxcontrib.plantuml']
+    extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
 
     # ---------- Options for PlantUML Integration ----------------
     plantuml = os.getenv('plantuml')
@@ -187,18 +125,3 @@ below:
         '**': ['globaltoc.html', 'relations.html', 'sidebarintro.html', 'searchbox.html']
     }
 
-    # -- Options for PDF output ---------------------------------------------------
-    pdf_documents = [
-        ('index', u'Sphinx-Maven-Plugin', u'Sphinx-Maven-Plugin', u'Bala Sridhar'),
-    ]
-
-    # -------- Options for JavaSphinx -------------------------------
-    javadoc_url_map = {
-        'java': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-        'javax': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-        'org.xml': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-        'org.w3c': ('http://docs.oracle.com/javase/7/docs/api/', 'javadoc'),
-        'org.apache.maven.plugin': ('http://maven.apache.org/plugin-tools/maven-plugin-plugin/apidocs/', 'javadoc'),
-        'org.apache.maven.reporting': ('https://maven.apache.org/shared/maven-reporting-api/apidocs/', 'javadoc'),
-        'org.codehaus.doxia.sink': ('http://maven.apache.org/doxia/doxia/doxia-sink-api/apidocs/', 'javadoc')
-    }

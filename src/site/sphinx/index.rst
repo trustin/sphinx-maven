@@ -2,7 +2,6 @@
 .. _`Sphinx`: http://sphinx.pocoo.org/
 .. _`reStructured Text`: http://docutils.sf.net/rst.html
 .. _`Markdown`: http://daringfireball.net/projects/markdown/
-.. _`JavaSphinx`: http://bronto.github.io/javasphinx/
 .. _`PlantUML`: http://plantuml.sourceforge.net/
 
 Introduction
@@ -25,15 +24,8 @@ This plugin contains the python packages and its dependencies that are needed to
 It also incorporates other open source plugins that are helpful while explaining complex concepts within documentation.
 These plugins are:
 
-`JavaSphinx`_
---------------
-This plugin is another way of incorporating javadocs directly into your sphinx documentation. This plugin provides a
-way to automatically read *javadoc* documentation from source code and convert it into restructured text format for
-Sphinx consumption. It also provides you bunch of reStructured Text markups that can be used to describe any
-pseudo code within documentation.
-
 `PlantUML`_
--------------
+-----------
 
 PlantUML is an open source tool that allows developers to create UML diagrams from plain text language. This project
 is written in Java and a sphinx extension named *sphinxcontrib-plantuml* had to be used for integrating PlantUML with
@@ -52,6 +44,4 @@ Sphinx. Underneath PlantUML, it uses *GraphViz* to generate the diagrams. A samp
 
    basic-usage
    configuration
-   development
    faq
-   javadoc/packages

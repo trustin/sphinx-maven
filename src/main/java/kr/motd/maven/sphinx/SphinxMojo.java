@@ -1,6 +1,7 @@
 package kr.motd.maven.sphinx;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -17,7 +18,8 @@ import org.codehaus.doxia.sink.Sink;
 /**
  * Sphinx Mojo
  *
- * @author tomdz & Bala Sridhar
+ * @author tomdz
+ * @author & Bala Sridhar
  * @version June 12, 2015
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
@@ -72,30 +74,6 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Parameter(property = "sphinx.force", defaultValue = "false", required = true, alias = "force")
     private boolean force;
 
-    /**
-     * Whether Java Sphinx should generate output for all files instead of only the changed ones.
-     */
-    @Parameter(property = "javaSphinx.force", defaultValue = "false", required = false, alias = "javaSphinxForce")
-    private boolean javaSphinxForce;
-
-    /**
-     * Whether Java Sphinx should generate verbose output.
-     */
-    @Parameter(property = "javaSphinx.verbose", defaultValue = "true", required = false, alias = "javaSphinxVerbose")
-    private boolean javaSphinxVerbose;
-
-    /**
-     * Provide the location where Java Sphinx should copy the java docs created.
-     */
-    @Parameter(property = "javaSphinx.outputDir", defaultValue = "${sphinx.srcDir}/javadocs/", required = false)
-    private File javaSphinxOutputDir;
-
-    /**
-     * Provide the list of directories that needs to be scanned to generate javadocs.
-     */
-    @Parameter(property = "javaSphinx.includeDir", required = false)
-    private List<File> javaSphinxIncludeDir;
-
     /** Sphinx Executor. */
     private final SphinxRunner sphinxRunner;
 
@@ -108,6 +86,10 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
     @Override
     public void execute() throws MojoExecutionException {
+        sourceDirectory = canonicalize(sourceDirectory);
+        outputDirectory = canonicalize(outputDirectory);
+        sphinxSourceDirectory = canonicalize(sphinxSourceDirectory);
+
         try {
             sphinxRunner.initEnv(sphinxSourceDirectory, getLog());
         } catch (Exception ex) {
@@ -115,31 +97,22 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         }
 
         try {
-            runJavaSphinx();
             executeSphinx();
         } finally {
             sphinxRunner.destroy();
         }
     }
 
-    /**
-     * Execute Java Sphinx
-     *
-     * @throws MojoExecutionException
-     */
-    private void runJavaSphinx() throws MojoExecutionException {
-        try {
-            List<String> args = getJavaSphinxCmdLine();
-            if (args.isEmpty()) {
-                return;
-            }
-            getLog().info("Running Java Sphinx, output will be placed in " + javaSphinxOutputDir);
+    private static File canonicalize(File directory) throws MojoExecutionException {
+        if (directory == null) {
+            return null;
+        }
 
-            if (sphinxRunner.runJavaSphinx(args) != 0) {
-                throw new MavenReportException("Java Sphinx report generation failed.");
-            }
-        } catch (MavenReportException ex) {
-            throw new MojoExecutionException("Failed to run the report", ex);
+        try {
+            directory.mkdirs();
+            return directory.getCanonicalFile();
+        } catch (IOException e) {
+            throw new MojoExecutionException("failed to create a directory: " + directory, e);
         }
     }
 
@@ -150,8 +123,8 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      */
     private void executeSphinx() throws MojoExecutionException{
         try {
-            getLog().info("Running Sphinx on " + sourceDirectory.getAbsolutePath() + ", output will be placed in "
-                    + outputDirectory.getAbsolutePath());
+            getLog().info("Running Sphinx on " + sourceDirectory + ", output will be placed in "
+                    + outputDirectory);
             List<String> args = getSphinxRunnerCmdLine();
             if (sphinxRunner.runSphinx(args) != 0) {
                 throw new MavenReportException("Sphinx report generation failed");
@@ -246,50 +219,9 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         args.add("-b");
         args.add(builder);
 
-        args.add(sourceDirectory.getAbsolutePath());
-        args.add(outputDirectory.getAbsolutePath() + File.separator + builder);
+        args.add(sourceDirectory.getPath());
+        args.add(outputDirectory.getPath());
 
         return args;
-    }
-
-    /**
-     * Build the Java Sphinx Command Line Options.
-     */
-    private List<String> getJavaSphinxCmdLine() {
-        List<String> javaSphinxArgs = new ArrayList<>();
-        // If the options are not specified then allow the process to continue.
-        if (javaSphinxOutputDir == null || javaSphinxIncludeDir == null || javaSphinxIncludeDir.isEmpty()) {
-            return javaSphinxArgs;
-        }
-
-        if (javaSphinxVerbose) {
-            javaSphinxArgs.add("-v");
-        }
-
-        if (javaSphinxForce) {
-            javaSphinxArgs.add("-f");
-        } else {
-            javaSphinxArgs.add("-u");
-        }
-
-        // Specify the HTML Parsing Library used.
-        javaSphinxArgs.add("-p");
-        javaSphinxArgs.add("html5lib");
-
-        javaSphinxArgs.add("-o");
-        javaSphinxArgs.add(javaSphinxOutputDir.getAbsolutePath());
-
-        javaSphinxArgs.add("-c");
-        javaSphinxArgs.add(javaSphinxOutputDir.getAbsolutePath());
-
-        int count = 0;
-        for (File includeDir : javaSphinxIncludeDir) {
-            if (count > 0) {
-                javaSphinxArgs.add("-I");
-            }
-            javaSphinxArgs.add(includeDir.getAbsolutePath());
-            count++;
-        }
-        return javaSphinxArgs;
     }
 }
