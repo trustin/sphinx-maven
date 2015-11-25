@@ -25,30 +25,28 @@ import net.sourceforge.plantuml.UmlDiagram;
 
 /**
  * Sphinx Runner.
- *
- * @author Bala Sridhar & tomdz
- * @version June 12, 2015
  */
-public class SphinxRunner {
+class SphinxRunner {
 
-    private static final String DIST_PREFIX = "kr/motd/maven/sphinx/dist/";
+    private static final String DIST_PREFIX =
+            SphinxRunner.class.getPackage().getName().replace('.', '/') + "/dist/";
 
     /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
-    private String plantUmlCommand;
+    private final String plantUmlCommand;
 
     /** Maven Logging Capability. */
-    private Log log;
+    private final Log log;
 
     /**
      * Initialize Environment to execute the plugin.
      */
-    public void initEnv(File sphinxSourceDirectory, Log log) throws MavenReportException {
+    SphinxRunner(File sphinxSourceDirectory, Log log) throws MavenReportException {
         this.log = log;
         if (sphinxSourceDirectory == null) {
             throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
         }
 
-        unpackSphinx(sphinxSourceDirectory);
+        extractSphinx(sphinxSourceDirectory);
         final File plantUmlJar = findPlantUmlJar();
 
         plantUmlCommand = "java -jar " + plantUmlJar.getPath().replace("\\", "\\\\");
@@ -80,7 +78,7 @@ public class SphinxRunner {
     private int executePythonScript(
             String script, String functionName, List<String> args, boolean resultExpected) {
 
-        log.debug("args: " + Arrays.toString(args.toArray()));
+        log.debug("args: " + args);
 
         PythonInterpreter pi = new PythonInterpreter();
 
@@ -118,7 +116,7 @@ public class SphinxRunner {
     /**
      * Execute Sphinx Documentation Builder.
      */
-    public int runSphinx(List<String> args) {
+    int runSphinx(List<String> args) {
         String invokeSphinxScript = "from sphinx import build_main";
         String functionName = "build_main";
         return executePythonScript(invokeSphinxScript, functionName, args, true);
@@ -127,12 +125,8 @@ public class SphinxRunner {
     /**
      * Unpack Sphinx zip file.
      */
-    private void unpackSphinx(File sphinxSourceDirectory) throws MavenReportException {
-        if (!sphinxSourceDirectory.exists() && !sphinxSourceDirectory.mkdirs()) {
-            throw new MavenReportException("Could not generate the temporary directory "
-                    + sphinxSourceDirectory + " for the sphinx sources");
-        }
-        log.debug("Unpacking sphinx to " + sphinxSourceDirectory);
+    private void extractSphinx(File sphinxSourceDirectory) throws MavenReportException {
+        log.debug("Extracting Sphinx into: " + sphinxSourceDirectory);
 
         try {
             final JarFile jar = new JarFile(findPluginJar(), false);
@@ -188,8 +182,8 @@ public class SphinxRunner {
                     throw new MavenReportException("failed to rename a file: " + tmpF + " -> " + f.getName());
                 }
             }
-        } catch (Exception ex) {
-            throw new MavenReportException("Could not unpack the sphinx source", ex);
+        } catch (Exception e) {
+            throw new MavenReportException("failed to extract Sphinx into: " + sphinxSourceDirectory, e);
         }
     }
 

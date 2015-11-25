@@ -24,30 +24,31 @@ Parameter                Description                                            
 ======================== ================================================================================================= ========================================
 
 Using PlantUML
-===============
+==============
 
-The ``sphinx-maven`` plugin has support for converting uml described using *PlantUML* text format within a *.rst* file
-to an image. It automatically references the image as part of the documentation in the appropriate place where the UML
-was defined in the reStructured Text source file. As mentioned before, PlantUML requires **GraphViz** to be installed 
-on the local machine. 
+The ``sphinx-maven`` plugin has support for converting uml described using *PlantUML* text format within a
+*.rst* file to an image. It automatically references the image as part of the documentation in the appropriate
+place where the UML was defined in the reStructured Text source file. As mentioned before, PlantUML requires
+**GraphViz** to be installed on the local machine.
 
 GraphViz
 --------
 
-GraphViz is a software package of opensource tools for drawing graphs described in DOT language scripts. More information
-regarding `GraphViz`_ can be found in their website. Windows installer can be downloaded from the website and the package
-is available as part of package management provided by the individual operating system vendor.
+GraphViz is a software package of opensource tools for drawing graphs described in DOT language scripts. More
+information regarding `GraphViz`_ can be found in their website. Windows installer can be downloaded from the
+website and the package is available as part of package management provided by the individual operating system
+vendor.
 
-Remember this is required only for building html pages containing GraphViz generated images. You don't need this library 
-for hosting the generated documentation.
+Remember this is required only for building html pages containing GraphViz generated images. You don't need
+this library for hosting the generated documentation.
 
 PlantUML Config
------------------
+---------------
 
 .. uml::
 
     @startuml
-    state pluginBuildProcess {
+    state siteBuildProcess {
         [*] -> buildJavaDocs
         buildJavaDocs: Using maven-javadoc-plugin
         buildJavaDocs -> buildSphinxDocs
@@ -56,72 +57,71 @@ PlantUML Config
     }
     @enduml
 
-You will need to add some additional configuration options to your ``conf.py`` file (usually in ``src/site/sphinx``)
-to tell Sphinx how to work with *.. uml::* directives. The steps involved are
+You will need to add some additional configuration options to your ``conf.py`` file (usually in
+``src/site/sphinx``) to tell Sphinx how to work with *.. uml::* directives. The steps involved are
 
-* You will need to add 'sphinxcontrib-plantuml' as an extension within the extension's list defined within ``conf.py``
+* You will need to add 'sphinxcontrib-plantuml' as an extension within the extension's list defined within
+  ``conf.py``
 * You will also have to import an environment variable's value within ``conf.py``.::
 
     import os
     plantuml = os.getenv('plantuml')
 
-Please note that it is absolutely necessary that the environment variable's value is assigned to the variable *plantuml*,
-so that the extension works as expected.
+Please note that it is absolutely necessary that the environment variable's value is assigned to the variable
+*plantuml*, so that the extension works as expected.
 
 A note on memory usage
 ======================
 
-Sphinx is run via `Jython`_ which will generate lots of small classes for various Python constructs. This means that
-the plugin will use a fair amount of memory, especially PermGen space (a moderate plugin run will likely use about 80mb
-of PermGen space). Therefore we suggest to either run maven with at least 256mb of heap and 128mb of PermGen space, e.g.
+Sphinx is run via `Jython`_ which will generate lots of small classes for various Python constructs. This means
+that the plugin will use a fair amount of memory, especially PermGen space (a moderate plugin run will likely
+use about 80mb of PermGen space). Therefore we suggest to either run maven with at least 256mb of heap and
+128mb of PermGen space::
 
     MAVEN_OPTS="-Xmx256m -XX:MaxPermSize=128m" mvn site
 
 
 Sample Documentation Config
-=============================
+===========================
 
-Sphinx looks at `conf.py` in the documentation source directory for building the final HTML file. This file contains 
-some basic settings for getting the desired output. The configuration used for generating the plugin documentation is given
-below:
+Sphinx looks at `conf.py` in the documentation source directory for building the final HTML file. This file
+contains some basic settings for getting the desired output. The configuration used for generating the plugin
+documentation is given below:
 
 .. code-block:: python
 
+    # -*- coding: utf-8 -*-
     import sys, os
+    from recommonmark.parser import CommonMarkParser
 
+    project = u'My Project'
+    copyright = u'YYYY, John Doe'
+    version = '1.2'
+    release = '1.2.0'
+
+    # General options
     needs_sphinx = '1.0'
+    master_doc = 'index'
+    pygments_style = 'tango'
+    add_function_parentheses = True
 
     extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
-
-    # ---------- Options for PlantUML Integration ----------------
-    plantuml = os.getenv('plantuml')
-
     templates_path = ['_templates']
-    source_suffix = '.rst'
-    source_encoding = 'utf-8-sig'
-    master_doc = 'index'
-
-    project = u'Sphinx-Maven'
-    copyright = u'2015, Bala Sridhar'
-
-    version = '3.1.0'
-    release = '3.1.0'
-
     exclude_trees = ['.build']
-
-    add_function_parentheses = True
-    pygments_style = 'trac'
-    master_doc = 'index'
-
-    # -- Options for HTML output ------------------
-    html_theme = 'pyramid'
-    html_short_title = "Sphinx-Maven"
-    html_use_smartypants = True
-    html_use_index = True
-    htmlhelp_basename = 'sphinxmavendoc'
-
-    html_sidebars = {
-        'index': ['globaltoc.html', 'relations.html', 'sidebarintro.html', 'searchbox.html'],
-        '**': ['globaltoc.html', 'relations.html', 'sidebarintro.html', 'searchbox.html']
+    source_suffix = ['.rst', '.md']
+    source_encoding = 'utf-8-sig'
+    source_parsers = {
+        '.md': CommonMarkParser
     }
 
+    # HTML options
+    html_theme = 'sphinx_rtd_theme'
+    html_short_title = "my-project"
+    htmlhelp_basename = 'my-project-doc'
+    html_use_index = True
+    html_use_smartypants = True
+    html_show_sourcelink = False
+    html_static_path = ['_static']
+
+    # PlantUML options
+    plantuml = os.getenv('plantuml')

@@ -15,14 +15,16 @@
 Using the Plugin
 ================
 
-The *sphinx-maven* plugin looks for *.rst* files in the folder structure provided as part of plugin configuration
-within your pom file. The default location where the plugin will look for the files is ``src/site/sphinx``.
+The *sphinx-maven-plugin* looks for *.rst* files in the folder structure provided as part of plugin
+configuration within your pom file. The default location where the plugin will look for the files is
+``src/site/sphinx``.
 
-The folder specified will contain the `reStructured Text`_ source files plus any additional things like themes and
-configuration. The `Sphinx first steps tutorial`_ gives a good introduction into the required tasks. Basically what
-you need is
+The folder specified will contain the `reStructured Text`_ source files plus any additional things like themes
+and configuration. The `Sphinx first steps tutorial`_ gives a good introduction into the required tasks.
+Basically what you need is:
 
-* A configuration file called `conf.py`_ that defines the theme and other options (such as which output formats etc.)
+* A configuration file called `conf.py`_ that defines the theme and other options (such as which output formats
+  etc.)
 * The documentation files in reStructured Text format.
 * Additional files such as static files (images etc.), usually in a ``_static`` sub directory.
 * Optionally, a customized theme in a sub directory called ``_theme``
@@ -30,63 +32,36 @@ you need is
 For good examples of documentation, see `Sphinx' examples page`_.
 
 Executing within ``site`` lifecycle
-=========================================
+===================================
 
-Simply add the sphinx maven plugin to your ``pom.xml``::
+Simply add the sphinx-maven-plugin to your ``pom.xml``::
 
     <reporting>
       <plugins>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-project-info-reports-plugin</artifactId>
-          <version>2.4</version>
+          <version>2.8.1</version>
           <reportSets>
             <reportSet>
-              <reports></reports>
+              <reports />
             </reportSet>
           </reportSets>
         </plugin>
         <plugin>
-          <groupId>org.caltesting.maven</groupId>
+          <groupId>kr.motd.maven</groupId>
           <artifactId>sphinx-maven-plugin</artifactId>
-          <version>3.1.0</version>
+          <version>1.1.0.Final</version>
+          <reportSets>
+            <reportSet>
+              <reports>
+                <report>generate</report>
+              </reports>
+            </reportSet>
+          </reportSets>
         </plugin>
       </plugins>
     </reporting>
-
-*Maven 3* changes how reporting plugins are specified. ::
-
-    <build>
-       <plugins>
-          <plugin>
-              <groupId>org.apache.maven.plugins</groupId>
-              <artifactId>maven-site-plugin</artifactId>
-              <version>3.0</version>
-              <configuration>
-                <reportPlugins>
-                  <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-project-info-reports-plugin</artifactId>
-                    <version>2.4</version>
-                    <reportSets>
-                      <reportSet>
-                        <reports></reports>
-                      </reportSet>
-                    </reportSets>
-                  </plugin>
-                  <plugin>
-                    <groupId>org.caltesting.maven</groupId>
-                    <artifactId>sphinx-maven-plugin</artifactId>
-                    <version>3.1.0</version>
-                  </plugin>
-                </reportPlugins>
-              </configuration>
-          </plugin>
-       </plugins>
-    </build>
-
-For more details about Maven 3 and the site plugin see the `Maven 3 site plugin wiki page`_ and this `Maven 3 site
-plugin howto`_.
 
 Now all you need to do is to generate the documentation::
 
@@ -95,14 +70,14 @@ Now all you need to do is to generate the documentation::
 This will generate the documentation in the `target/site` folder.
 
 Executing within normal lifecycle
-=======================================
+=================================
 
 You can also bind the plugin to a normal lifecycle phase. This is for instance useful if you want to generate a
 documentation artifact and deploy it somewhere.
 
-The plugin configuration is pretty much the same, the only difference is that you need to add an ``execution`` section.
-It might also be useful to change the ``outputDirectory`` to a different folder as the plugin by default puts the
-generated documentation into the ``target/site`` folder.
+The plugin configuration is pretty much the same, the only difference is that you need to add an ``execution``
+section. It might also be useful to change the ``outputDirectory`` to a different folder as the plugin by
+default puts the generated documentation into the ``target/site`` folder.
 
 A sample ``pom.xml`` plugin section could look like this::
 
@@ -110,9 +85,9 @@ A sample ``pom.xml`` plugin section could look like this::
       <plugins>
         ...
         <plugin>
-          <groupId>org.caltesting.maven</groupId>
+          <groupId>kr.motd.maven</groupId>
           <artifactId>sphinx-maven-plugin</artifactId>
-          <version>3.1.0</version>
+          <version>1.1.0.Final</version>
           <configuration>
             <outputDirectory>${project.build.directory}/docs</outputDirectory>
           </configuration>

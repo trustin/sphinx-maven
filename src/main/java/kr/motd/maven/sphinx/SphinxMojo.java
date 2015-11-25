@@ -17,10 +17,6 @@ import org.codehaus.doxia.sink.Sink;
 
 /**
  * Sphinx Mojo
- *
- * @author tomdz
- * @author & Bala Sridhar
- * @version June 12, 2015
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
@@ -74,30 +70,21 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Parameter(property = "sphinx.force", defaultValue = "false", required = true, alias = "force")
     private boolean force;
 
-    /** Sphinx Executor. */
-    private final SphinxRunner sphinxRunner;
-
-    /**
-     * Default Constructor.
-     */
-    public SphinxMojo() {
-        sphinxRunner = new SphinxRunner();
-    }
-
     @Override
     public void execute() throws MojoExecutionException {
         sourceDirectory = canonicalize(sourceDirectory);
         outputDirectory = canonicalize(outputDirectory);
         sphinxSourceDirectory = canonicalize(sphinxSourceDirectory);
 
+        final SphinxRunner sphinxRunner;
         try {
-            sphinxRunner.initEnv(sphinxSourceDirectory, getLog());
+            sphinxRunner = new SphinxRunner(sphinxSourceDirectory, getLog());
         } catch (Exception ex) {
             throw new MojoExecutionException("Failed to extract libraries.", ex);
         }
 
         try {
-            executeSphinx();
+            executeSphinx(sphinxRunner);
         } finally {
             sphinxRunner.destroy();
         }
@@ -121,7 +108,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      *
      * @throws MojoExecutionException
      */
-    private void executeSphinx() throws MojoExecutionException{
+    private void executeSphinx(SphinxRunner sphinxRunner) throws MojoExecutionException{
         try {
             getLog().info("Running Sphinx on " + sourceDirectory + ", output will be placed in "
                     + outputDirectory);
@@ -133,7 +120,6 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             throw new MojoExecutionException("Failed to run the report", t);
         }
     }
-
 
     @Override
     public void generate(
