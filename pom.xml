@@ -13,9 +13,9 @@
   <packaging>maven-plugin</packaging>
 
   <version>1.2.0.Final-SNAPSHOT</version>
-  <url>https://github.com/trustin/sphinx-maven</url>
+  <url>http://trustin.github.io/sphinx-maven-plugin/</url>
 
-  <name>sphinx-maven</name>
+  <name>sphinx-maven-plugin</name>
   <description>Maven plugin that creates the site with Sphinx</description>
 
   <licenses>
@@ -51,9 +51,9 @@
   </developers>
 
   <scm>
-    <connection>scm:git:git://github.com/trustin/sphinx-maven.git</connection>
-    <developerConnection>scm:git:git@github.com:trustin/sphinx-maven.git</developerConnection>
-    <url>https://github.com/trustin/sphinx-maven</url>
+    <connection>scm:git:git://github.com/trustin/sphinx-maven-plugin.git</connection>
+    <developerConnection>scm:git:git@github.com:trustin/sphinx-maven-plugin.git</developerConnection>
+    <url>https://github.com/trustin/sphinx-maven-plugin</url>
     <tag>HEAD</tag>
   </scm>
 
