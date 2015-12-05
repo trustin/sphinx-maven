@@ -151,7 +151,7 @@ from sphinx.util.docfields import Field, GroupedField
             | "&   attribute-specifier-seq[opt]
             | "&&" attribute-specifier-seq[opt]
             | "::"[opt] nested-name-specifier "*" attribute-specifier-seq[opt]
-                cv-qualifier-seq[opt] # TOOD: not implemented
+                cv-qualifier-seq[opt]
         # function_object must use a parameters-and-qualifiers, the others may
         # use it (e.g., function poitners)
         parameters-and-qualifiers ->
@@ -1402,9 +1402,14 @@ class ASTDeclaratorPtr(ASTBase):
     def __unicode__(self):
         res = ['*']
         if self.volatile:
-            res.append('volatile ')
+            res.append('volatile')
         if self.const:
-            res.append('const ')
+            if self.volatile:
+                res.append(' ')
+            res.append('const')
+        if self.const or self.volatile:
+            if self.next.require_space_after_declSpecs:
+                res.append(' ')
         res.append(text_type(self.next))
         return u''.join(res)
 
@@ -1459,6 +1464,18 @@ class ASTDeclaratorPtr(ASTBase):
     def describe_signature(self, signode, mode, env, symbol):
         _verify_description_mode(mode)
         signode += nodes.Text("*")
+
+        def _add_anno(signode, text):
+            signode += addnodes.desc_annotation(text, text)
+        if self.volatile:
+            _add_anno(signode, 'volatile')
+        if self.const:
+            if self.volatile:
+                signode += nodes.Text(' ')
+            _add_anno(signode, 'const')
+        if self.const or self.volatile:
+            if self.next.require_space_after_declSpecs:
+                signode += nodes.Text(' ')
         self.next.describe_signature(signode, mode, env, symbol)
 
 
@@ -1568,6 +1585,94 @@ class ASTDeclaratorParamPack(ASTBase):
         signode += nodes.Text("...")
         if self.next.name:
             signode += nodes.Text(' ')
+        self.next.describe_signature(signode, mode, env, symbol)
+
+
+class ASTDeclaratorMemPtr(ASTBase):
+    def __init__(self, className, const, volatile, next):
+        assert className
+        assert next
+        self.className = className
+        self.const = const
+        self.volatile = volatile
+        self.next = next
+
+    @property
+    def name(self):
+        return self.next.name
+
+    def require_space_after_declSpecs(self):
+        return True
+
+    def __unicode__(self):
+        res = []
+        res.append(text_type(self.className))
+        res.append('::*')
+        if self.volatile:
+            res.append(' volatile')
+        if self.const:
+            res.append(' const')
+        if self.next.require_space_after_declSpecs():
+            res.append(' ')
+        res.append(text_type(self.next))
+        return ''.join(res)
+
+    # Id v1 ------------------------------------------------------------------
+
+    def get_modifiers_id_v1(self):
+        raise NoOldIdError()
+
+    def get_param_id_v1(self):  # only the parameters (if any)
+        raise NoOldIdError()
+
+    def get_ptr_suffix_id_v1(self):
+        raise NoOldIdError()
+
+    # Id v2 ------------------------------------------------------------------
+
+    def get_modifiers_id_v2(self):
+        return self.next.get_modifiers_id_v2()
+
+    def get_param_id_v2(self):  # only the parameters (if any)
+        return self.next.get_param_id_v2()
+
+    def get_ptr_suffix_id_v2(self):
+        raise NotImplementedError()
+        return self.next.get_ptr_suffix_id_v2() + u'Dp'
+
+    def get_type_id_v2(self, returnTypeId):
+        # ReturnType name::* next, so we are part of the return type of next
+        nextReturnTypeId = ''
+        if self.volatile:
+            nextReturnTypeId += 'V'
+        if self.const:
+            nextReturnTypeId += 'K'
+        nextReturnTypeId += 'M'
+        nextReturnTypeId += self.className.get_id_v2()
+        nextReturnTypeId += returnTypeId
+        return self.next.get_type_id_v2(nextReturnTypeId)
+
+    # ------------------------------------------------------------------------
+
+    def is_function_type(self):
+        return self.next.is_function_type()
+
+    def describe_signature(self, signode, mode, env, symbol):
+        _verify_description_mode(mode)
+        self.className.describe_signature(signode, mode, env, symbol)
+        signode += nodes.Text('::*')
+
+        def _add_anno(signode, text):
+            signode += addnodes.desc_annotation(text, text)
+        if self.volatile:
+            _add_anno(signode, 'volatile')
+        if self.const:
+            if self.volatile:
+                signode += nodes.Text(' ')
+            _add_anno(signode, 'const')
+        if self.next.require_space_after_declSpecs():
+            if self.volatile or self.const:
+                signode += nodes.Text(' ')
         self.next.describe_signature(signode, mode, env, symbol)
 
 
@@ -2013,7 +2118,17 @@ class ASTDeclaration(ASTBase):
         self.declaration = declaration
 
         self.symbol = None
-        self.declarationScope = None  # set by Symbol.add_declaration
+        # set by CPPObject._add_enumerator_to_parent
+        self.enumeratorScopedSymbol = None
+
+    def clone(self):
+        if self.templatePrefix:
+            templatePrefixClone = self.templatePrefix.clone()
+        else:
+            templatePrefixClone = None
+        return ASTDeclaration(self.objectType, self.visibility,
+                              templatePrefixClone,
+                              self.declaration.clone())
 
     @property
     def name(self):
@@ -2022,9 +2137,13 @@ class ASTDeclaration(ASTBase):
     def get_id_v1(self):
         if self.templatePrefix:
             raise NoOldIdError()
+        if self.objectType == 'enumerator' and self.enumeratorScopedSymbol:
+            return self.enumeratorScopedSymbol.declaration.get_id_v1()
         return self.declaration.get_id_v1(self.objectType, self.symbol)
 
     def get_id_v2(self, prefixed=True):
+        if self.objectType == 'enumerator' and self.enumeratorScopedSymbol:
+            return self.enumeratorScopedSymbol.declaration.get_id_v2(prefixed)
         if prefixed:
             res = [_id_prefix_v2]
         else:
@@ -2056,9 +2175,6 @@ class ASTDeclaration(ASTBase):
         parentNode.pop()
 
         assert self.symbol
-        if not self.declarationScope:
-            raise NotImplementedError("hmm, a bug? %s" % text_type(self))
-        assert self.declarationScope
         if self.templatePrefix:
             self.templatePrefix.describe_signature(parentNode, mode, env,
                                                    symbol=self.symbol)
@@ -2131,10 +2247,32 @@ class Symbol(object):
             for p in self.templateParams.params:
                 if not p.get_identifier():
                     continue
-                decl = ASTDeclaration('templateParam', None, None, p)
+                # only add a declaration if we our selfs from a declaration
+                if declaration:
+                    decl = ASTDeclaration('templateParam', None, None, p)
+                else:
+                    decl = None
                 nne = ASTNestedNameElement(p.get_identifier(), None)
                 nn = ASTNestedName([nne], rooted=False)
                 self._add_symbols(nn, [], decl, docname)
+
+    def _fill_empty(self, declaration, docname):
+        self._assert_invariants()
+        assert not self.declaration
+        assert not self.docname
+        assert declaration
+        assert docname
+        self.declaration = declaration
+        self.declaration.symbol = self
+        self.docname = docname
+        self._assert_invariants()
+
+    def clear_doc(self, docname):
+        for sChild in self.children:
+            sChild.clear_doc(docname)
+            if sChild.declaration and sChild.docname == docname:
+                sChild.declaration = None
+                sChild.docname = None
 
     def get_all_symbols(self):
         yield self
@@ -2170,38 +2308,44 @@ class Symbol(object):
 
     def _find_named_symbol(self, identifier, templateParams,
                            templateArgs, operator,
-                           templateShorthand):
+                           templateShorthand, matchSelf):
         assert (identifier is None) != (operator is None)
-        for s in self.children:
+
+        def matches(s):
             if s.identifier != identifier:
-                continue
+                return False
             if not s.identifier:
                 if not s.declaration:
-                    continue
+                    return False
                 assert operator
                 name = s.declaration.name.names[-1]
                 if not name.is_operator():
-                    continue
+                    return False
                 if text_type(name) != text_type(operator):
-                    continue
+                    return False
             if (s.templateParams is None) != (templateParams is None):
                 if templateParams is not None:
                     # we query with params, they must match params
-                    continue
+                    return False
                 if not templateShorthand:
                     # we don't query with params, and we do care about them
-                    continue
+                    return False
             if templateParams:
                 # TODO: do better comparison
                 if text_type(s.templateParams) != text_type(templateParams):
-                    continue
+                    return False
             if (s.templateArgs is None) != (templateArgs is None):
-                continue
+                return False
             if s.templateArgs:
                 # TODO: do better comparison
                 if text_type(s.templateArgs) != text_type(templateArgs):
-                    continue
-            return s
+                    return False
+            return True
+        if matchSelf and matches(self):
+            return self
+        for s in self.children:
+            if matches(s):
+                return s
         return None
 
     def _add_symbols(self, nestedName, templateDecls, declaration, docname):
@@ -2215,7 +2359,6 @@ class Symbol(object):
         if nestedName.rooted:
             while parentSymbol.parent:
                 parentSymbol = parentSymbol.parent
-        declarationScope = parentSymbol
         names = nestedName.names
         iTemplateDecl = 0
         for name in names[:-1]:
@@ -2234,7 +2377,8 @@ class Symbol(object):
                                                      templateParams,
                                                      templateArgs,
                                                      operator=None,
-                                                     templateShorthand=False)
+                                                     templateShorthand=False,
+                                                     matchSelf=False)
             if symbol is None:
                 symbol = Symbol(parent=parentSymbol, identifier=identifier,
                                 templateParams=templateParams,
@@ -2263,7 +2407,8 @@ class Symbol(object):
                                                  templateParams,
                                                  templateArgs,
                                                  operator,
-                                                 templateShorthand=False)
+                                                 templateShorthand=False,
+                                                 matchSelf=False)
         if symbol:
             if not declaration:
                 # good, just a scope creation
@@ -2274,11 +2419,7 @@ class Symbol(object):
                 # .. namespace:: Test
                 # .. namespace:: nullptr
                 # .. class:: Test
-                symbol.declaration = declaration
-                symbol.docname = docname
-                declaration.symbol = symbol
-                declaration.declarationScope = declarationScope
-                symbol._assert_invariants()
+                symbol._fill_empty(declaration, docname)
                 return symbol
             # it may simply be a functin overload
             # TODO: it could be a duplicate but let's just insert anyway
@@ -2288,16 +2429,54 @@ class Symbol(object):
                             templateArgs=templateArgs,
                             declaration=declaration,
                             docname=docname)
-            declaration.declarationScope = declarationScope
         else:
             symbol = Symbol(parent=parentSymbol, identifier=identifier,
                             templateParams=templateParams,
                             templateArgs=templateArgs,
                             declaration=declaration,
                             docname=docname)
-            if declaration:
-                declaration.declarationScope = declarationScope
         return symbol
+
+    def merge_with(self, other, docnames, env):
+        assert other is not None
+        for otherChild in other.children:
+            if not otherChild.identifier:
+                if not otherChild.declaration:
+                    print("WTF?")
+                    print(otherChild.dump(0))
+                    print(other.dump(0))
+                assert otherChild.declaration
+                operator = otherChild.declaration.name.names[-1]
+                assert operator.is_operator()
+            else:
+                operator = None
+            ourChild = self._find_named_symbol(otherChild.identifier,
+                                               otherChild.templateParams,
+                                               otherChild.templateArgs,
+                                               operator,
+                                               templateShorthand=False,
+                                               matchSelf=False)
+            if ourChild is None:
+                # TODO: hmm, should we prune by docnames?
+                self.children.append(otherChild)
+                otherChild.parent = self
+                otherChild._assert_invariants()
+                continue
+            if otherChild.declaration and otherChild.docname in docnames:
+                if not ourChild.declaration:
+                    ourChild._fill_empty(otherChild.declaration, otherChild.docname)
+                elif ourChild.docname != otherChild.docname:
+                    name = text_type(ourChild.declaration)
+                    msg = "Duplicate declaration, also defined in '%s'.\n"
+                    msg += "Declaration is '%s'."
+                    msg = msg % (ourChild.docname, name)
+                    env.warn(otherChild.docname, msg)
+                else:
+                    # Both have declarations, and in the same docname.
+                    # This can apparently happen, it should be safe to
+                    # just ignore it, right?
+                    pass
+            ourChild.merge_with(otherChild, docnames, env)
 
     def add_name(self, nestedName, templatePrefix=None):
         if templatePrefix:
@@ -2308,6 +2487,8 @@ class Symbol(object):
                                  declaration=None, docname=None)
 
     def add_declaration(self, declaration, docname):
+        assert declaration
+        assert docname
         nestedName = declaration.name
         if declaration.templatePrefix:
             templateDecls = declaration.templatePrefix.templates
@@ -2315,7 +2496,9 @@ class Symbol(object):
             templateDecls = []
         return self._add_symbols(nestedName, templateDecls, declaration, docname)
 
-    def find_identifier(self, identifier):
+    def find_identifier(self, identifier, matchSelf):
+        if matchSelf and self.identifier and self.identifier == identifier:
+            return self
         for s in self.children:
             if s.identifier and s.identifier == identifier:
                 return s
@@ -2334,12 +2517,13 @@ class Symbol(object):
                 operator = None
             s = s._find_named_symbol(identifier, templateParams,
                                      templateArgs, operator,
-                                     templateShorthand=False)
+                                     templateShorthand=False,
+                                     matchSelf=True)
             if not s:
                 return None
         return s
 
-    def find_name(self, nestedName, templateDecls, templateShorthand):
+    def find_name(self, nestedName, templateDecls, templateShorthand, matchSelf):
         # templateShorthand: missing template parameter lists for templates is ok
 
         # TODO: unify this with the _add_symbols
@@ -2355,7 +2539,8 @@ class Symbol(object):
         firstName = names[0]
         if not firstName.is_operator():
             while parentSymbol.parent:
-                if parentSymbol.find_identifier(firstName.identifier):
+                if parentSymbol.find_identifier(firstName.identifier,
+                                                matchSelf=matchSelf):
                     break
                 parentSymbol = parentSymbol.parent
 
@@ -2381,7 +2566,8 @@ class Symbol(object):
                                                          templateParams,
                                                          templateArgs,
                                                          operator,
-                                                         templateShorthand=templateShorthand)
+                                                         templateShorthand=templateShorthand,
+                                                         matchSelf=matchSelf)
                 if symbol:
                     return symbol
                 else:
@@ -2400,29 +2586,42 @@ class Symbol(object):
                                                          templateParams,
                                                          templateArgs,
                                                          operator=None,
-                                                         templateShorthand=templateShorthand)
+                                                         templateShorthand=templateShorthand,
+                                                         matchSelf=matchSelf)
                 if symbol is None:
                     # TODO: maybe search without template args
                     return None
             parentSymbol = symbol
         assert False  # should have returned in the loop
 
-    def dump(self, indent):
+    def to_string(self, indent):
+        self._assert_invariants()
         res = ['\t'*indent]
-        if self.identifier:
+        if not self.parent:
+            res.append('::')
+        else:
             if self.templateParams:
                 res.append(text_type(self.templateParams))
                 res.append('\n')
                 res.append('\t'*indent)
-            res.append(text_type(self.identifier))
+            if self.identifier:
+                res.append(text_type(self.identifier))
+            else:
+                res.append(text_type(self.declaration))
             if self.templateArgs:
                 res.append(text_type(self.templateArgs))
             if self.declaration:
                 res.append(": ")
                 res.append(text_type(self.declaration))
-        else:
-            res.append('::')
+        if self.docname:
+            res.append('\t(')
+            res.append(self.docname)
+            res.append(')')
         res.append('\n')
+        return ''.join(res)
+
+    def dump(self, indent):
+        res = [self.to_string(indent)]
         for c in self.children:
             res.append(c.dump(indent + 1))
         return ''.join(res)
@@ -2446,6 +2645,30 @@ class DefinitionParser(object):
         self._previous_state = (0, None)
 
         self.warnEnv = warnEnv
+
+    def _make_multi_error(self, errors, header):
+        if len(errors) == 1:
+            return DefinitionError(header + '\n' + errors[0][0].description)
+        result = [header, '\n']
+        for e in errors:
+            if len(e[1]) > 0:
+                ident = '  '
+                result.append(e[1])
+                result.append(':\n')
+                for line in e[0].description.split('\n'):
+                    if len(line) == 0:
+                        continue
+                    result.append(ident)
+                    result.append(line)
+                    result.append('\n')
+            else:
+                result.append(e[0].description)
+        return DefinitionError(''.join(result))
+
+    def status(self, msg):
+        # for debugging
+        indicator = '-' * self.pos + '^'
+        print("%s\n%s\n%s" % (msg, self.definition, indicator))
 
     def fail(self, msg):
         indicator = '-' * self.pos + '^'
@@ -2578,6 +2801,7 @@ class DefinitionParser(object):
         self.skip_ws()
         if not self.skip_string('<'):
             return None
+        prevErrors = []
         templateArgs = []
         while 1:
             pos = self.pos
@@ -2594,7 +2818,7 @@ class DefinitionParser(object):
                     self.fail('Expected ">" or "," in template argument list.')
                 templateArgs.append(type)
             except DefinitionError as e:
-                errorType = e.description
+                prevErrors.append((e, "If type argument"))
                 self.pos = pos
                 try:
                     value = self._parse_expression(end=[',', '>'])
@@ -2607,18 +2831,16 @@ class DefinitionParser(object):
                         self.fail('Expected ">" or "," in template argument list.')
                     templateArgs.append(ASTTemplateArgConstant(value))
                 except DefinitionError as e:
-                    errorExpr = e.description
-                    msg = "Error in parsing template argument list. " \
-                        "Error if type argument:\n%s\n" \
-                        "Error if non-type argument:\n%s" \
-                        % (errorType, errorExpr)
-                    self.fail(msg)
+                    self.pos = pos
+                    prevErrors.append((e, "If non-type argument"))
+                    header = "Error in parsing template argument list."
+                    raise self._make_multi_error(prevErrors, header)
             if parsedEnd:
                 assert not parsedComma
                 break
         return ASTTemplateArgs(templateArgs)
 
-    def _parse_nested_name(self):
+    def _parse_nested_name(self, memberPointer=False):
         names = []
 
         self.skip_ws()
@@ -2634,6 +2856,8 @@ class DefinitionParser(object):
                 names.append(op)
             else:
                 if not self.match(_identifier_re):
+                    if memberPointer and len(names) > 0:
+                        break
                     self.fail("Expected identifier in nested name.")
                 identifier = self.matched_text
                 # make sure there isn't a keyword
@@ -2646,6 +2870,8 @@ class DefinitionParser(object):
 
             self.skip_ws()
             if not self.skip_string('::'):
+                if memberPointer:
+                    self.fail("Expected '::' in pointer to member (function).")
                 break
         return ASTNestedName(names, rooted)
 
@@ -2714,7 +2940,7 @@ class DefinitionParser(object):
                                   'parameters_and_qualifiers.')
                     break
                 if paramMode == 'function':
-                    arg = self._parse_type_with_init(outer=None, named='maybe')
+                    arg = self._parse_type_with_init(outer=None, named='single')
                 else:
                     arg = self._parse_type(named=False)
                 # TODO: parse default parameters # TODO: didn't we just do that?
@@ -2730,7 +2956,10 @@ class DefinitionParser(object):
                         'Expecting "," or ")" in parameters_and_qualifiers, '
                         'got "%s".' % self.current_char)
 
-        if paramMode != 'function':
+        # TODO: why did we have this bail-out?
+        # does it hurt to parse the extra stuff?
+        # it's needed for pointer to member functions
+        if paramMode != 'function' and False:
             return ASTParametersQualifiers(
                 args, None, None, None, None, None, None, None)
 
@@ -2871,26 +3100,27 @@ class DefinitionParser(object):
     def _parse_declarator_name_param_qual(self, named, paramMode, typed):
         # now we should parse the name, and then suffixes
         if named == 'maybe':
+            pos = self.pos
             try:
                 declId = self._parse_nested_name()
             except DefinitionError:
+                self.pos = pos
                 declId = None
         elif named == 'single':
             if self.match(_identifier_re):
                 identifier = ASTIdentifier(self.matched_text)
                 nne = ASTNestedNameElement(identifier, None)
                 declId = ASTNestedName([nne], rooted=False)
+                # if it's a member pointer, we may have '::', which should be an error
+                self.skip_ws()
+                if self.current_char == ':':
+                    self.fail("Unexpected ':' after identifier.")
             else:
                 declId = None
         elif named:
             declId = self._parse_nested_name()
         else:
             declId = None
-        self.skip_ws()
-        if typed and declId:
-            if self.skip_string("*"):
-                self.fail("Member pointers not implemented.")
-
         arrayOps = []
         while 1:
             self.skip_ws()
@@ -2911,6 +3141,7 @@ class DefinitionParser(object):
         if paramMode not in ('type', 'function', 'operatorCast'):
             raise Exception(
                 "Internal error, unknown paramMode '%s'." % paramMode)
+        prevErrors = []
         self.skip_ws()
         if typed and self.skip_string('*'):
             self.skip_ws()
@@ -2929,13 +3160,39 @@ class DefinitionParser(object):
             next = self._parse_declerator(named, paramMode, typed)
             return ASTDeclaratorPtr(next=next, volatile=volatile, const=const)
         # TODO: shouldn't we parse an R-value ref here first?
-        elif typed and self.skip_string("&"):
+        if typed and self.skip_string("&"):
             next = self._parse_declerator(named, paramMode, typed)
             return ASTDeclaratorRef(next=next)
-        elif typed and self.skip_string("..."):
+        if typed and self.skip_string("..."):
             next = self._parse_declerator(named, paramMode, False)
             return ASTDeclaratorParamPack(next=next)
-        elif typed and self.current_char == '(':  # note: peeking, not skipping
+        if typed:  # pointer to member
+            pos = self.pos
+            try:
+                name = self._parse_nested_name(memberPointer=True)
+                self.skip_ws()
+                if not self.skip_string('*'):
+                    self.fail("Expected '*' in pointer to member declarator.")
+                self.skip_ws()
+            except DefinitionError as e:
+                self.pos = pos
+                prevErrors.append((e, "If pointer to member declarator"))
+            else:
+                volatile = False
+                const = False
+                while 1:
+                    if not volatile:
+                        volatile = self.skip_word_and_ws('volatile')
+                        if volatile:
+                            continue
+                    if not const:
+                        const = self.skip_word_and_ws('const')
+                        if const:
+                            continue
+                    break
+                next = self._parse_declerator(named, paramMode, typed)
+                return ASTDeclaratorMemPtr(name, const, volatile, next=next)
+        if typed and self.current_char == '(':  # note: peeking, not skipping
             if paramMode == "operatorCast":
                 # TODO: we should be able to parse cast operators which return
                 # function pointers. For now, just hax it and ignore.
@@ -2943,14 +3200,15 @@ class DefinitionParser(object):
                                                   paramQual=None)
             # maybe this is the beginning of params and quals,try that first,
             # otherwise assume it's noptr->declarator > ( ptr-declarator )
-            startPos = self.pos
+            pos = self.pos
             try:
                 # assume this is params and quals
                 res = self._parse_declarator_name_param_qual(named, paramMode,
                                                              typed)
                 return res
             except DefinitionError as exParamQual:
-                self.pos = startPos
+                prevErrors.append((exParamQual, "If declId, parameters, and qualifiers"))
+                self.pos = pos
                 try:
                     assert self.current_char == '('
                     self.skip_string('(')
@@ -2965,13 +3223,18 @@ class DefinitionParser(object):
                                                   typed=typed)
                     return ASTDeclaratorParen(inner=inner, next=next)
                 except DefinitionError as exNoPtrParen:
-                    raise DefinitionError(
-                        "If declId, parameters, and qualifiers {\n%s\n"
-                        "} else If parenthesis in noptr-declarator {\n%s\n}"
-                        % (exParamQual, exNoPtrParen))
-        else:
-            return self._parse_declarator_name_param_qual(named, paramMode,
-                                                          typed)
+                    self.pos = pos
+                    prevErrors.append((exNoPtrParen, "If parenthesis in noptr-declarator"))
+                    header = "Error in declarator"
+                    raise self._make_multi_error(prevErrors, header)
+        pos = self.pos
+        try:
+            return self._parse_declarator_name_param_qual(named, paramMode, typed)
+        except DefinitionError as e:
+            self.pos = pos
+            prevErrors.append((e, "If declarator-id"))
+            header = "Error in declarator or parameters and qualifiers"
+            raise self._make_multi_error(prevErrors, header)
 
     def _parse_initializer(self, outer=None):
         self.skip_ws()
@@ -3008,6 +3271,7 @@ class DefinitionParser(object):
             # We allow type objects to just be a name.
             # Some functions don't have normal return types: constructors,
             # destrutors, cast operators
+            prevErrors = []
             startPos = self.pos
             # first try without the type
             try:
@@ -3016,37 +3280,49 @@ class DefinitionParser(object):
                                               typed=False)
                 self.assert_end()
             except DefinitionError as exUntyped:
+                if outer == 'type':
+                    desc = "If just a name"
+                elif outer == 'function':
+                    desc = "If the function has no return type"
+                else:
+                    assert False
+                prevErrors.append((exUntyped, desc))
                 self.pos = startPos
                 try:
                     declSpecs = self._parse_decl_specs(outer=outer)
                     decl = self._parse_declerator(named=True, paramMode=outer)
                 except DefinitionError as exTyped:
+                    self.pos = startPos
+                    if outer == 'type':
+                        desc = "If typedef-like declaration"
+                    elif outer == 'function':
+                        desc = "If the function has a return type"
+                    else:
+                        assert False
+                    prevErrors.append((exTyped, desc))
                     # Retain the else branch for easier debugging.
                     # TODO: it would be nice to save the previous stacktrace
                     #       and output it here.
                     if True:
                         if outer == 'type':
-                            desc = ('Type must be either just a name or a '
-                                    'typedef-like declaration.\n'
-                                    'Just a name error: %s\n'
-                                    'Typedef-like expression error: %s')
+                            header = "Type must be either just a name or a "
+                            header += "typedef-like declaration."
                         elif outer == 'function':
-                            desc = ('Error when parsing function declaration:\n'
-                                    'If no return type {\n%s\n'
-                                    '} else if return type {\n%s\n}')
+                            header = "Error when parsing function declaration."
                         else:
                             assert False
-                        raise DefinitionError(
-                            desc % (exUntyped.description, exTyped.description))
+                        raise self._make_multi_error(prevErrors, header)
                     else:
                         # For testing purposes.
                         # do it again to get the proper traceback (how do you
                         # relieable save a traceback when an exception is
                         # constructed?)
+                        pass
                         self.pos = startPos
-                        declSpecs = self._parse_decl_specs(outer=outer, typed=False)
+                        typed = True
+                        declSpecs = self._parse_decl_specs(outer=outer, typed=typed)
                         decl = self._parse_declerator(named=True, paramMode=outer,
-                                                      typed=False)
+                                                      typed=typed)
         else:
             paramMode = 'type'
             if outer == 'member':  # i.e., member
@@ -3132,7 +3408,7 @@ class DefinitionParser(object):
         if not self.skip_string("<"):
             self.fail("Expected '<' after 'template'")
         while 1:
-            extraError = ''
+            prevErrors = []
             self.skip_ws()
             if self.skip_word('template'):
                 # declare a tenplate template parameter
@@ -3178,19 +3454,20 @@ class DefinitionParser(object):
                     param = self._parse_type_with_init('maybe', 'templateParam')
                     templateParams.append(ASTTemplateParamNonType(param))
                 except DefinitionError as e:
+                    prevErrors.append((e, "If non-type template parameter"))
                     self.pos = pos
-                    extraError = "Error if non-type template parameter: %s"
-                    extraError = extraError % e.description
             self.skip_ws()
             if self.skip_string('>'):
                 return ASTTemplateParams(templateParams)
             elif self.skip_string(','):
                 continue
             else:
-                msg = 'Expected "=", ",", or ">" in template parameter list.'
-                if len(extraError) > 0:
-                    msg += '\n%s' % extraError
-                self.fail(msg)
+                header = "Error in template parameter list."
+                try:
+                    self.fail('Expected "=", ",", or ">".')
+                except DefinitionError as e:
+                    prevErrors.append((e, ""))
+                raise self._make_multi_error(prevErrors, header)
 
     def _parse_template_declaration_prefix(self):
         templates = []
@@ -3253,25 +3530,23 @@ class DefinitionParser(object):
             templatePrefix = self._parse_template_declaration_prefix()
 
         if objectType == 'type':
-            error = None
+            prevErrors = []
             pos = self.pos
             try:
                 if not templatePrefix:
                     declaration = self._parse_type(named=True, outer='type')
             except DefinitionError as e:
-                error = e.description
+                prevErrors.append((e, "If typedef-like declaration"))
                 self.pos = pos
+            pos = self.pos
             try:
                 if not declaration:
                     declaration = self._parse_type_using()
             except DefinitionError as e:
-                if error:
-                    msg = "Error if typedef:\n%s\n" \
-                          "Error if type alias or template alias:\n%s" \
-                          % (error, e.description)
-                    raise DefinitionError(msg)
-                else:
-                    raise e
+                self.pos = pos
+                prevErrors.append((e, "If type alias or template alias"))
+                header = "Error in type declaration."
+                raise self._make_multi_error(prevErrors, header)
         elif objectType == 'member':
             declaration = self._parse_type_with_init(named=True, outer='member')
         elif objectType == 'function':
@@ -3332,7 +3607,7 @@ class CPPObject(ObjectDescription):
     ]
 
     def warn(self, msg):
-        self.state_machine.reporter.warning(msg, lineno=self.lineno)
+        self.state_machine.reporter.warning(msg, line=self.lineno)
 
     def _add_enumerator_to_parent(self, ast):
         assert ast.objectType == 'enumerator'
@@ -3364,13 +3639,15 @@ class CPPObject(ObjectDescription):
             return
 
         targetSymbol = parentSymbol.parent
-        s = targetSymbol.find_identifier(symbol.identifier)
+        s = targetSymbol.find_identifier(symbol.identifier, matchSelf=False)
         if s is not None:
             # something is already declared with that name
             return
+        declClone = symbol.declaration.clone()
+        declClone.enumeratorScopedSymbol = symbol
         Symbol(parent=targetSymbol, identifier=symbol.identifier,
                templateParams=None, templateArgs=None,
-               declaration=symbol.declaration.clone(),
+               declaration=declClone,
                docname=self.env.docname)
 
     def add_target_and_index(self, ast, sig, signode):
@@ -3549,7 +3826,7 @@ class CPPNamespaceObject(Directive):
     option_spec = {}
 
     def warn(self, msg):
-        self.state_machine.reporter.warning(msg, lineno=self.lineno)
+        self.state_machine.reporter.warning(msg, line=self.lineno)
 
     def run(self):
         env = self.state.document.settings.env
@@ -3563,8 +3840,7 @@ class CPPNamespaceObject(Directive):
                 ast = parser.parse_namespace_object()
                 parser.assert_end()
             except DefinitionError as e:
-                self.state_machine.reporter.warning(e.description,
-                                                    line=self.lineno)
+                self.warn(e.description)
                 name = _make_phony_error_name()
                 ast = ASTNamespace(name, None)
             symbol = rootSymbol.add_name(ast.nestedName, ast.templatePrefix)
@@ -3582,7 +3858,7 @@ class CPPNamespacePushObject(Directive):
     option_spec = {}
 
     def warn(self, msg):
-        self.state_machine.reporter.warning(msg, lineno=self.lineno)
+        self.state_machine.reporter.warning(msg, line=self.lineno)
 
     def run(self):
         env = self.state.document.settings.env
@@ -3593,8 +3869,7 @@ class CPPNamespacePushObject(Directive):
             ast = parser.parse_namespace_object()
             parser.assert_end()
         except DefinitionError as e:
-            self.state_machine.reporter.warning(e.description,
-                                                line=self.lineno)
+            self.warn(e.description)
             name = _make_phony_error_name()
             ast = ASTNamespace(name, None)
         oldParent = env.ref_context.get('cpp:parentSymbol', None)
@@ -3616,7 +3891,7 @@ class CPPNamespacePopObject(Directive):
     option_spec = {}
 
     def warn(self, msg):
-        self.state_machine.reporter.warning(msg, lineno=self.lineno)
+        self.state_machine.reporter.warning(msg, line=self.lineno)
 
     def run(self):
         env = self.state.document.settings.env
@@ -3697,24 +3972,30 @@ class CPPDomain(Domain):
 
     def clear_doc(self, docname):
         rootSymbol = self.data['rootSymbol']
-        for symbol in rootSymbol.get_all_symbols():
-            if not symbol.declaration:
-                continue
-            if symbol.docname != docname:
-                continue
-            symbol.declaration = None
-            symbol.docname = None
+        rootSymbol.clear_doc(docname)
         for name, nDocname in list(self.data['names'].items()):
             if nDocname == docname:
                 del self.data['names'][name]
 
     def process_doc(self, env, docname, document):
         # just for debugging
+        # print(docname)
         # print(self.data['rootSymbol'].dump(0))
         pass
 
-    # def merge_domaindata(self, docnames, otherdata):
-    #    # TODO: merge rootSymbol
+    def merge_domaindata(self, docnames, otherdata):
+        self.data['rootSymbol'].merge_with(otherdata['rootSymbol'],
+                                           docnames, self.env)
+        ourNames = self.data['names']
+        for name, docname in otherdata['names'].items():
+            if docname in docnames:
+                if name in ourNames:
+                    msg = "Duplicate declaration, also defined in '%s'.\n"
+                    msg += "Name of declaration is '%s'."
+                    msg = msg % (ourNames[name], name)
+                    self.env.warn(docname, msg)
+                else:
+                    ourNames[name] = docname
 
     def _resolve_xref_inner(self, env, fromdocname, builder,
                             target, node, contnode, emitWarnings=True):
@@ -3749,7 +4030,8 @@ class CPPDomain(Domain):
         else:
             templateDecls = []
         s = parentSymbol.find_name(name, templateDecls,
-                                   templateShorthand=True)
+                                   templateShorthand=True,
+                                   matchSelf=True)
         if s is None or s.declaration is None:
             return None, None
         declaration = s.declaration
