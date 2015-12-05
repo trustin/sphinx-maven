@@ -40,7 +40,7 @@ DIV_PRE_RE = re.compile(r'^<div[^>]*><pre>')
 PRE_DIV_RE = re.compile(r'\s*</pre></div>\s*$')
 
 def html_visit_literal(self, node):
-    env = self.settings.env
+    env = self.builder.env
 
     shall_highlight = False
 
