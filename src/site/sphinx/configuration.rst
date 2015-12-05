@@ -72,7 +72,6 @@ Please note that it is absolutely necessary that the environment variable's valu
 
 A note on memory usage
 ======================
-
 Sphinx is run via `Jython`_ which will generate lots of small classes for various Python constructs. This means
 that the plugin will use a fair amount of memory, especially PermGen space (a moderate plugin run will likely
 use about 80mb of PermGen space). Therefore we suggest to either run maven with at least 256mb of heap and
@@ -83,45 +82,44 @@ use about 80mb of PermGen space). Therefore we suggest to either run maven with 
 
 Sample Documentation Config
 ===========================
-
 Sphinx looks at `conf.py` in the documentation source directory for building the final HTML file. This file
 contains some basic settings for getting the desired output. The configuration used for generating the plugin
 documentation is given below:
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
-    import sys, os
-    from recommonmark.parser import CommonMarkParser
+  # -*- coding: utf-8 -*-
+  import sys, os
+  from recommonmark.parser import CommonMarkParser
 
-    project = u'My Project'
-    copyright = u'YYYY, John Doe'
-    version = '1.2'
-    release = '1.2.0'
+  project = u'My Project'
+  copyright = u'YYYY, John Doe'
+  version = '1.0'
+  release = '1.0.0'
 
-    # General options
-    needs_sphinx = '1.0'
-    master_doc = 'index'
-    pygments_style = 'tango'
-    add_function_parentheses = True
+  # General options
+  needs_sphinx = '1.0'
+  master_doc = 'index'
+  pygments_style = 'tango'
+  add_function_parentheses = True
 
-    extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
-    templates_path = ['_templates']
-    exclude_trees = ['.build']
-    source_suffix = ['.rst', '.md']
-    source_encoding = 'utf-8-sig'
-    source_parsers = {
-        '.md': CommonMarkParser
-    }
+  extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml', 'javasphinx']
+  templates_path = ['_templates']
+  exclude_trees = ['.build']
+  source_suffix = ['.rst', '.md']
+  source_encoding = 'utf-8-sig'
+  source_parsers = {
+    '.md': CommonMarkParser
+  }
 
-    # HTML options
-    html_theme = 'sphinx_rtd_theme'
-    html_short_title = "my-project"
-    htmlhelp_basename = 'my-project-doc'
-    html_use_index = True
-    html_use_smartypants = True
-    html_show_sourcelink = False
-    html_static_path = ['_static']
+  # HTML options
+  html_theme = 'sphinx_rtd_theme'
+  html_short_title = "my-project"
+  htmlhelp_basename = 'my-project-doc'
+  html_use_index = True
+  html_use_smartypants = True
+  html_show_sourcelink = False
+  html_static_path = ['_static']
 
-    # PlantUML options
-    plantuml = os.getenv('plantuml')
+  # PlantUML options
+  plantuml = os.getenv('plantuml')

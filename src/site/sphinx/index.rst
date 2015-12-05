@@ -5,10 +5,13 @@
 .. _`PlantUML`: http://plantuml.sourceforge.net/
 .. _`Thomas Dudziak`: https://github.com/tomdz/sphinx-maven
 .. _`Bala Sridhar`: https://github.com/balasridhar/sphinx-maven
+.. _`sphinxcontrib-plantuml`: https://pypi.python.org/pypi/sphinxcontrib-plantuml
+.. _`sphinxcontrib-inlinesyntaxhighlight`: http://sphinxcontrib-inlinesyntaxhighlight.readthedocs.org/en/latest/
+.. _`recommonmark`: https://recommonmark.readthedocs.org/en/latest/
+.. _`javasphinx`: http://bronto.github.io/javasphinx/
 
-Introduction
-============
-
+sphinx-maven-plugin
+===================
 The *sphinx-maven-plugin* is a `Maven site plugin`_ that uses `Sphinx`_ to generate the main documentation.
 Sphinx itself was originally created by the Python community for the new Python documentation. It uses a
 plain text format called `reStructured Text`_ which it then compiles into a variety of documentation formats
@@ -26,27 +29,34 @@ using `Sphinx`_. The plugin only supports the default themes that come along wit
 It also incorporates other open source plugins that are helpful while explaining complex concepts within
 documentation. These plugins are:
 
-`PlantUML`_
------------
+Extensions
+----------
+Besides the extensions distributed with `Sphinx`_, this plugin includes the following extensions:
 
-PlantUML is an open source tool that allows developers to create UML diagrams from plain text language. This project
-is written in Java and a sphinx extension named *sphinxcontrib-plantuml* had to be used for integrating PlantUML with
-Sphinx. Underneath PlantUML, it uses *GraphViz* to generate the diagrams. A sample uml diagram is given below:
-
-.. uml::
-
-   @startuml
-   Alice -> Bob: Hi!
-   Alice <- Bob: How are you?
-   @enduml
+- `sphinxcontrib-plantuml`_ - enables embedding `PlantUML`_ diagrams
+- `sphinxcontrib-inlinesyntaxhighlight`_ - enables syntax-highlighting inline literals
+- `recommonmark`_ - adds Markdown support
+- `javasphinx`_ - adds the Java domain
 
 Credits and changes
 -------------------
 This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since then upgraded Sphinx to 1.3.1
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
-heavy lifting. This fork includes the following small additional changes:
+heavy lifting. This fork includes the following additional changes:
 
-- Available in Maven central repository
+1.2.0.Final (05-Dec-2015)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+- Added `sphinxcontrib-inlinesyntaxhighlight`_ extension
+- Added `javasphinx`_ extension back again
+
+  - ``javasphinx-apidoc`` support has not been added back, because I'm not convinced it's more useful than
+    Javadoc
+
+- Updated Sphinx to the latest master (1.3.3)
+- Updated Pygments to the latest master
+
+1.1.0.Final (25-Nov-2015)
+^^^^^^^^^^^^^^^^^^^^^^^^^
 - Updated Sphinx to the latest master
 - Updated both Java and Python dependencies
 - Reduced the time taken for launching Sphinx

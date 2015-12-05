@@ -23,49 +23,51 @@ The folder specified will contain the `reStructured Text`_ source files plus any
 and configuration. The `Sphinx first steps tutorial`_ gives a good introduction into the required tasks.
 Basically what you need is:
 
-* A configuration file called `conf.py`_ that defines the theme and other options (such as which output formats
+- A configuration file called `conf.py`_ that defines the theme and other options (such as which output formats
   etc.)
-* The documentation files in reStructured Text format.
-* Additional files such as static files (images etc.), usually in a ``_static`` sub directory.
-* Optionally, a customized theme in a sub directory called ``_theme``
+- The documentation files in reStructured Text format.
+- Additional files such as static files (images etc.), usually in a ``_static`` sub directory.
+- Optionally, a customized theme in a sub directory called ``_theme``
 
 For good examples of documentation, see `Sphinx' examples page`_.
 
 Executing within ``site`` lifecycle
 ===================================
 
-Simply add the sphinx-maven-plugin to your ``pom.xml``::
+Simply add the sphinx-maven-plugin to your ``pom.xml``:
 
-    <reporting>
-      <plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-project-info-reports-plugin</artifactId>
-          <version>2.8.1</version>
-          <reportSets>
-            <reportSet>
-              <reports />
-            </reportSet>
-          </reportSets>
-        </plugin>
-        <plugin>
-          <groupId>kr.motd.maven</groupId>
-          <artifactId>sphinx-maven-plugin</artifactId>
-          <version>1.1.0.Final</version>
-          <reportSets>
-            <reportSet>
-              <reports>
-                <report>generate</report>
-              </reports>
-            </reportSet>
-          </reportSets>
-        </plugin>
-      </plugins>
-    </reporting>
+.. parsed-literal::
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+        <version>2.8.1</version>
+        <reportSets>
+          <reportSet>
+            <reports />
+          </reportSet>
+        </reportSets>
+      </plugin>
+      <plugin>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>sphinx-maven-plugin</artifactId>
+        <version>\ |release|\ </version>
+        <reportSets>
+          <reportSet>
+            <reports>
+              <report>generate</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+    </plugins>
+  </reporting>
 
 Now all you need to do is to generate the documentation::
 
-    mvn site
+  mvn site
 
 This will generate the documentation in the `target/site` folder.
 
@@ -79,27 +81,29 @@ The plugin configuration is pretty much the same, the only difference is that yo
 section. It might also be useful to change the ``outputDirectory`` to a different folder as the plugin by
 default puts the generated documentation into the ``target/site`` folder.
 
-A sample ``pom.xml`` plugin section could look like this::
+A sample ``pom.xml`` plugin section could look like this:
 
-    <build>
-      <plugins>
-        ...
-        <plugin>
-          <groupId>kr.motd.maven</groupId>
-          <artifactId>sphinx-maven-plugin</artifactId>
-          <version>1.1.0.Final</version>
-          <configuration>
-            <outputDirectory>${project.build.directory}/docs</outputDirectory>
-          </configuration>
-          <executions>
-            <execution>
-              <phase>package</phase>
-              <goals>
-                <goal>generate</goal>
-              </goals>
-            </execution>
-          </executions>
-        </plugin>
-        ...
-      </plugins>
-    </build>
+.. parsed-literal::
+
+  <build>
+    <plugins>
+      ...
+      <plugin>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>sphinx-maven-plugin</artifactId>
+        <version>\ |release|\ </version>
+        <configuration>
+          <outputDirectory>${project.build.directory}/docs</outputDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      ...
+    </plugins>
+  </build>

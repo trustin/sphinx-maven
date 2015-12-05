@@ -5,8 +5,8 @@ from recommonmark.parser import CommonMarkParser
 
 project = u'sphinx-maven-plugin'
 copyright = u'2015, Trustin Lee et al'
-version = '1.1'
-release = '1.1.0.Final'
+version = '1.2'
+release = '1.2.0.Final'
 
 # General options
 needs_sphinx = '1.0'
@@ -14,13 +14,13 @@ master_doc = 'index'
 pygments_style = 'tango'
 add_function_parentheses = True
 
-extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
+extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml', 'javasphinx']
 templates_path = ['_templates']
 exclude_trees = ['.build']
 source_suffix = ['.rst', '.md']
 source_encoding = 'utf-8-sig'
 source_parsers = {
-    '.md': CommonMarkParser
+  '.md': CommonMarkParser
 }
 
 # HTML options
