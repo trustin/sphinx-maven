@@ -5,7 +5,7 @@
 
     Formatter for HTML output.
 
-    :copyright: Copyright 2006-2014 by the Pygments team, see AUTHORS.
+    :copyright: Copyright 2006-2015 by the Pygments team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -36,20 +36,10 @@ _escape_html_table = {
     ord("'"): u'&#39;',
 }
 
+
 def escape_html(text, table=_escape_html_table):
     """Escape &, <, > as well as single and double quotes for HTML."""
     return text.translate(table)
-
-def get_random_id():
-    """Return a random id for javascript fields."""
-    from random import random
-    from time import time
-    try:
-        from hashlib import sha1 as sha
-    except ImportError:
-        import sha
-        sha = sha.new
-    return sha('%s|%s' % (random(), time())).hexdigest()
 
 
 def _get_ttype_class(ttype):
@@ -150,7 +140,7 @@ class HtmlFormatter(Formatter):
 
     When `tagsfile` is set to the path of a ctags index file, it is used to
     generate hyperlinks from names to their definition.  You must enable
-    `anchorlines` and run ctags with the `-n` option for this to work.  The
+    `lineanchors` and run ctags with the `-n` option for this to work.  The
     `python-ctags` module from PyPI must be installed to use this feature;
     otherwise a `RuntimeError` will be raised.
 
@@ -438,6 +428,15 @@ class HtmlFormatter(Formatter):
             return self.classprefix + ttypeclass
         return ''
 
+    def _get_css_classes(self, ttype):
+        """Return the css classes of this token type prefixed with
+        the classprefix option."""
+        cls = self._get_css_class(ttype)
+        while ttype not in STANDARD_TYPES:
+            ttype = ttype.parent
+            cls = self._get_css_class(ttype) + ' ' + cls
+        return cls
+
     def _create_stylesheet(self):
         t2c = self.ttype2class = {Token: ''}
         c2s = self.class2style = {}
@@ -712,7 +711,7 @@ class HtmlFormatter(Formatter):
         tagsfile = self.tagsfile
 
         lspan = ''
-        line = ''
+        line = []
         for ttype, value in tokensource:
             if nocls:
                 cclass = getcls(ttype)
@@ -721,7 +720,7 @@ class HtmlFormatter(Formatter):
                     cclass = getcls(ttype)
                 cspan = cclass and '<span style="%s">' % c2s[cclass][0] or ''
             else:
-                cls = self._get_css_class(ttype)
+                cls = self._get_css_classes(ttype)
                 cspan = cls and '<span class="%s">' % cls or ''
 
             parts = value.translate(escape_table).split('\n')
@@ -743,30 +742,31 @@ class HtmlFormatter(Formatter):
             for part in parts[:-1]:
                 if line:
                     if lspan != cspan:
-                        line += (lspan and '</span>') + cspan + part + \
-                                (cspan and '</span>') + lsep
+                        line.extend(((lspan and '</span>'), cspan, part,
+                                (cspan and '</span>'), lsep))
                     else: # both are the same
-                        line += part + (lspan and '</span>') + lsep
-                    yield 1, line
-                    line = ''
+                        line.extend((part, (lspan and '</span>'), lsep))
+                    yield 1, ''.join(line)
+                    line = []
                 elif part:
-                    yield 1, cspan + part + (cspan and '</span>') + lsep
+                    yield 1, ''.join((cspan, part, (cspan and '</span>'), lsep))
                 else:
                     yield 1, lsep
             # for the last line
             if line and parts[-1]:
                 if lspan != cspan:
-                    line += (lspan and '</span>') + cspan + parts[-1]
+                    line.extend(((lspan and '</span>'), cspan, parts[-1]))
                     lspan = cspan
                 else:
-                    line += parts[-1]
+                    line.append(parts[-1])
             elif parts[-1]:
-                line = cspan + parts[-1]
+                line = [cspan, parts[-1]]
                 lspan = cspan
             # else we neither have to open a new span nor set lspan
 
         if line:
-            yield 1, line + (lspan and '</span>') + lsep
+            line.extend(((lspan and '</span>'), lsep))
+            yield 1, ''.join(line)
 
     def _lookup_ctag(self, token):
         entry = ctags.TagEntry()
