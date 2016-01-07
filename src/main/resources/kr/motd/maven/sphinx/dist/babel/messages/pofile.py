@@ -10,6 +10,7 @@
     :license: BSD, see LICENSE for more details.
 """
 
+from __future__ import print_function
 import os
 import re
 
@@ -21,7 +22,7 @@ from babel._compat import text_type
 def unescape(string):
     r"""Reverse `escape` the given string.
 
-    >>> print unescape('"Say:\\n  \\"hello, world!\\"\\n"')
+    >>> print(unescape('"Say:\\n  \\"hello, world!\\"\\n"'))
     Say:
       "hello, world!"
     <BLANKLINE>
@@ -44,18 +45,18 @@ def unescape(string):
 def denormalize(string):
     r"""Reverse the normalization done by the `normalize` function.
 
-    >>> print denormalize(r'''""
+    >>> print(denormalize(r'''""
     ... "Say:\n"
-    ... "  \"hello, world!\"\n"''')
+    ... "  \"hello, world!\"\n"'''))
     Say:
       "hello, world!"
     <BLANKLINE>
 
-    >>> print denormalize(r'''""
+    >>> print(denormalize(r'''""
     ... "Say:\n"
     ... "  \"Lorem ipsum dolor sit "
     ... "amet, consectetur adipisicing"
-    ... " elit, \"\n"''')
+    ... " elit, \"\n"'''))
     Say:
       "Lorem ipsum dolor sit amet, consectetur adipisicing elit, "
     <BLANKLINE>
@@ -77,7 +78,7 @@ def read_po(fileobj, locale=None, domain=None, ignore_obsolete=False, charset=No
     file-like object and return a `Catalog`.
 
     >>> from datetime import datetime
-    >>> from StringIO import StringIO
+    >>> from babel._compat import StringIO
     >>> buf = StringIO('''
     ... #: main.py:1
     ... #, fuzzy, python-format
@@ -93,18 +94,18 @@ def read_po(fileobj, locale=None, domain=None, ignore_obsolete=False, charset=No
     ... msgstr[1] "baaz"
     ... ''')
     >>> catalog = read_po(buf)
-    >>> catalog.revision_date = datetime(2007, 04, 01)
+    >>> catalog.revision_date = datetime(2007, 4, 1)
 
     >>> for message in catalog:
     ...     if message.id:
-    ...         print (message.id, message.string)
-    ...         print ' ', (message.locations, message.flags)
-    ...         print ' ', (message.user_comments, message.auto_comments)
+    ...         print((message.id, message.string))
+    ...         print(' ', (message.locations, sorted(list(message.flags))))
+    ...         print(' ', (message.user_comments, message.auto_comments))
     (u'foo %(name)s', u'quux %(name)s')
-      ([(u'main.py', 1)], set([u'fuzzy', u'python-format']))
+      ([(u'main.py', 1)], [u'fuzzy', u'python-format'])
       ([], [])
     ((u'bar', u'baz'), (u'bar', u'baaz'))
-      ([(u'main.py', 3)], set([]))
+      ([(u'main.py', 3)], [])
       ([u'A user comment'], [u'An auto comment'])
 
     .. versionadded:: 1.0
@@ -218,6 +219,8 @@ def read_po(fileobj, locale=None, domain=None, ignore_obsolete=False, charset=No
                         except ValueError:
                             continue
                         locations.append((location[:pos], lineno))
+                    else:
+                        locations.append((location, None))
             elif line[1:].startswith(','):
                 for flag in line[2:].lstrip().split(','):
                     flags.append(flag.strip())
@@ -276,16 +279,16 @@ def escape(string):
 def normalize(string, prefix='', width=76):
     r"""Convert a string into a format that is appropriate for .po files.
 
-    >>> print normalize('''Say:
+    >>> print(normalize('''Say:
     ...   "hello, world!"
-    ... ''', width=None)
+    ... ''', width=None))
     ""
     "Say:\n"
     "  \"hello, world!\"\n"
 
-    >>> print normalize('''Say:
+    >>> print(normalize('''Say:
     ...   "Lorem ipsum dolor sit amet, consectetur adipisicing elit, "
-    ... ''', width=32)
+    ... ''', width=32))
     ""
     "Say:\n"
     "  \"Lorem ipsum dolor sit "
@@ -346,10 +349,10 @@ def write_po(fileobj, catalog, width=76, no_location=False, omit_header=False,
     <Message...>
     >>> catalog.add((u'bar', u'baz'), locations=[('main.py', 3)])
     <Message...>
-    >>> from io import BytesIO
+    >>> from babel._compat import BytesIO
     >>> buf = BytesIO()
     >>> write_po(buf, catalog, omit_header=True)
-    >>> print buf.getvalue()
+    >>> print(buf.getvalue().decode("utf8"))
     #: main.py:1
     #, fuzzy, python-format
     msgid "foo %(name)s"
@@ -449,9 +452,13 @@ def write_po(fileobj, catalog, width=76, no_location=False, omit_header=False,
             _write_comment(comment, prefix='.')
 
         if not no_location:
-            locs = u' '.join([u'%s:%d' % (filename.replace(os.sep, '/'), lineno)
-                              for filename, lineno in message.locations])
-            _write_comment(locs, prefix=':')
+            locs = []
+            for filename, lineno in message.locations:
+                if lineno:
+                    locs.append(u'%s:%d' % (filename.replace(os.sep, '/'), lineno))
+                else:
+                    locs.append(u'%s' % filename.replace(os.sep, '/'))
+            _write_comment(' '.join(locs), prefix=':')
         if message.flags:
             _write('#%s\n' % ', '.join([''] + sorted(message.flags)))
 

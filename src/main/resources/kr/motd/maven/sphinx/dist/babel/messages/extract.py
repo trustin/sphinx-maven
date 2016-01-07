@@ -18,10 +18,11 @@
 """
 
 import os
+from os.path import relpath
 import sys
 from tokenize import generate_tokens, COMMENT, NAME, OP, STRING
 
-from babel.util import parse_encoding, pathmatch, relpath
+from babel.util import parse_encoding, pathmatch
 from babel._compat import PY2, text_type
 from textwrap import dedent
 
@@ -202,17 +203,18 @@ def extract(method, fileobj, keywords=DEFAULT_KEYWORDS, comment_tags=(),
     The implementation dispatches the actual extraction to plugins, based on the
     value of the ``method`` parameter.
 
-    >>> source = '''# foo module
+    >>> source = b'''# foo module
     ... def run(argv):
-    ...    print _('Hello, world!')
+    ...    print(_('Hello, world!'))
     ... '''
 
-    >>> from StringIO import StringIO
-    >>> for message in extract('python', StringIO(source)):
-    ...     print message
+    >>> from babel._compat import BytesIO
+    >>> for message in extract('python', BytesIO(source)):
+    ...     print(message)
     (3, u'Hello, world!', [], None)
 
-    :param method: a string specifying the extraction method (.e.g. "python");
+    :param method: an extraction method (a callable), or
+                   a string specifying the extraction method (.e.g. "python");
                    if this is a simple name, the extraction function will be
                    looked up by entry point; if it is an explicit reference
                    to a function (of the form ``package.module:funcname`` or
@@ -231,7 +233,9 @@ def extract(method, fileobj, keywords=DEFAULT_KEYWORDS, comment_tags=(),
     :raise ValueError: if the extraction method is not registered
     """
     func = None
-    if ':' in method or '.' in method:
+    if callable(method):
+        func = method
+    elif ':' in method or '.' in method:
         if ':' not in method:
             lastdot = method.rfind('.')
             module, attrname = method[:lastdot], method[lastdot + 1:]
@@ -258,6 +262,7 @@ def extract(method, fileobj, keywords=DEFAULT_KEYWORDS, comment_tags=(),
                 'javascript': extract_javascript
             }
             func = builtin.get(method)
+
     if func is None:
         raise ValueError('Unknown extraction method %r' % method)
 

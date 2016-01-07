@@ -137,7 +137,7 @@ class LazyProxy(object):
     >>> def greeting(name='world'):
     ...     return 'Hello, %s!' % name
     >>> lazy_greeting = LazyProxy(greeting, name='Joe')
-    >>> print lazy_greeting
+    >>> print(lazy_greeting)
     Hello, Joe!
     >>> u'  ' + lazy_greeting
     u'  Hello, Joe!'
@@ -160,7 +160,7 @@ class LazyProxy(object):
     ... ]
     >>> greetings.sort()
     >>> for greeting in greetings:
-    ...     print greeting
+    ...     print(greeting)
     Hello, Joe!
     Hello, universe!
     Hello, world!
@@ -263,6 +263,23 @@ class LazyProxy(object):
     def __setitem__(self, key, value):
         self.value[key] = value
 
+    def __copy__(self):
+        return LazyProxy(
+            self._func,
+            enable_cache=self._is_cache_enabled,
+            *self._args,
+            **self._kwargs
+        )
+
+    def __deepcopy__(self, memo):
+        from copy import deepcopy
+        return LazyProxy(
+            deepcopy(self._func, memo),
+            enable_cache=deepcopy(self._is_cache_enabled, memo),
+            *deepcopy(self._args, memo),
+            **deepcopy(self._kwargs, memo)
+        )
+
 
 class NullTranslations(gettext.NullTranslations, object):
 
@@ -281,7 +298,7 @@ class NullTranslations(gettext.NullTranslations, object):
         self._catalog = {}
         self.plural = lambda n: int(n != 1)
         super(NullTranslations, self).__init__(fp=fp)
-        self.files = filter(None, [getattr(fp, 'name', None)])
+        self.files = list(filter(None, [getattr(fp, 'name', None)]))
         self.domain = self.DEFAULT_DOMAIN
         self._domains = {}
 

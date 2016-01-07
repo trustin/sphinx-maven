@@ -25,9 +25,9 @@ def distinct(iterable):
     Unlike when using sets for a similar effect, the original ordering of the
     items in the collection is preserved by this function.
 
-    >>> print list(distinct([1, 2, 1, 3, 4, 4]))
+    >>> print(list(distinct([1, 2, 1, 3, 4, 4])))
     [1, 2, 3, 4]
-    >>> print list(distinct('foobar'))
+    >>> print(list(distinct('foobar')))
     ['f', 'o', 'b', 'a', 'r']
 
     :param iterable: the iterable collection providing the data
@@ -46,7 +46,7 @@ def parse_encoding(fp):
 
     It does this in the same way as the `Python interpreter`__
 
-    .. __: http://docs.python.org/ref/encodings.html
+    .. __: https://docs.python.org/3.4/reference/lexical_analysis.html#encoding-declarations
 
     The ``fp`` argument should be a seekable file object.
 
@@ -77,9 +77,11 @@ def parse_encoding(fp):
 
         if has_bom:
             if m:
-                raise SyntaxError(
-                    "python refuses to compile code with both a UTF8 "
-                    "byte-order-mark and a magic encoding comment")
+                magic_comment_encoding = m.group(1).decode('latin-1')
+                if magic_comment_encoding != 'utf-8':
+                    raise SyntaxError(
+                        'encoding problem: {0} with BOM'.format(
+                            magic_comment_encoding))
             return 'utf-8'
         elif m:
             return m.group(1).decode('latin-1')
@@ -172,8 +174,9 @@ class odict(dict):
         self._keys.remove(key)
 
     def __setitem__(self, key, item):
+        new_key = key not in self
         dict.__setitem__(self, key, item)
-        if key not in self._keys:
+        if new_key:
             self._keys.append(key)
 
     def __iter__(self):
@@ -199,12 +202,15 @@ class odict(dict):
         return self._keys[:]
 
     def pop(self, key, default=missing):
-        if default is missing:
-            return dict.pop(self, key)
-        elif key not in self:
-            return default
-        self._keys.remove(key)
-        return dict.pop(self, key, default)
+        try:
+            value = dict.pop(self, key)
+            self._keys.remove(key)
+            return value
+        except KeyError as e:
+            if default == missing:
+                raise e
+            else:
+                return default
 
     def popitem(self, key):
         self._keys.remove(key)
@@ -224,29 +230,6 @@ class odict(dict):
 
     def itervalues(self):
         return imap(self.get, self._keys)
-
-
-try:
-    relpath = os.path.relpath
-except AttributeError:
-    def relpath(path, start='.'):
-        """Compute the relative path to one path from another.
-
-        >>> relpath('foo/bar.txt', '').replace(os.sep, '/')
-        'foo/bar.txt'
-        >>> relpath('foo/bar.txt', 'foo').replace(os.sep, '/')
-        'bar.txt'
-        >>> relpath('foo/bar.txt', 'baz').replace(os.sep, '/')
-        '../foo/bar.txt'
-        """
-        start_list = os.path.abspath(start).split(os.sep)
-        path_list = os.path.abspath(path).split(os.sep)
-
-        # Work out how much of the filepath is shared by start and path.
-        i = len(os.path.commonprefix([start_list, path_list]))
-
-        rel_list = [os.path.pardir] * (len(start_list) - i) + path_list[i:]
-        return os.path.join(*rel_list)
 
 
 class FixedOffsetTimezone(tzinfo):

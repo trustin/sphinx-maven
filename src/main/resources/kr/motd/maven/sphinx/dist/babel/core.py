@@ -113,10 +113,10 @@ class Locale(object):
     If a locale is requested for which no locale data is available, an
     `UnknownLocaleError` is raised:
 
-    >>> Locale.parse('en_DE')
+    >>> Locale.parse('en_XX')
     Traceback (most recent call last):
         ...
-    UnknownLocaleError: unknown locale 'en_DE'
+    UnknownLocaleError: unknown locale 'en_XX'
 
     For more information see :rfc:`3066`.
     """
@@ -326,6 +326,9 @@ class Locale(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __hash__(self):
+        return hash((self.language, self.territory, self.script, self.variant))
+
     def __repr__(self):
         parameters = ['']
         for key in ('territory', 'script', 'variant'):
@@ -432,8 +435,8 @@ class Locale(object):
     script_name = property(get_script_name, doc="""\
         The localized script name of the locale if available.
 
-        >>> Locale('ms', 'SG', script='Latn').script_name
-        u'Latin'
+        >>> Locale('sr', 'ME', script='Latn').script_name
+        u'latinica'
     """)
 
     @property
@@ -544,7 +547,9 @@ class Locale(object):
     def currency_formats(self):
         """Locale patterns for currency number formatting.
 
-        >>> print Locale('en', 'US').currency_formats[None]
+        >>> Locale('en', 'US').currency_formats['standard']
+        <NumberPattern u'\\xa4#,##0.00'>
+        >>> Locale('en', 'US').currency_formats['accounting']
         <NumberPattern u'\\xa4#,##0.00'>
         """
         return self._data['currency_formats']
@@ -722,7 +727,7 @@ class Locale(object):
         >>> Locale('en').datetime_formats['full']
         u"{1} 'at' {0}"
         >>> Locale('th').datetime_formats['medium']
-        u'{1}, {0}'
+        u'{1} {0}'
         """
         return self._data['datetime_formats']
 
@@ -740,6 +745,36 @@ class Locale(object):
         'many'
         """
         return self._data.get('plural_form', _default_plural_rule)
+
+    @property
+    def list_patterns(self):
+        """Patterns for generating lists
+
+        >>> Locale('en').list_patterns['start']
+        u'{0}, {1}'
+        >>> Locale('en').list_patterns['end']
+        u'{0}, and {1}'
+        >>> Locale('en_GB').list_patterns['end']
+        u'{0} and {1}'
+        """
+        return self._data['list_patterns']
+
+    @property
+    def ordinal_form(self):
+        """Plural rules for the locale.
+
+        >>> Locale('en').ordinal_form(1)
+        'one'
+        >>> Locale('en').ordinal_form(2)
+        'two'
+        >>> Locale('en').ordinal_form(3)
+        'few'
+        >>> Locale('fr').ordinal_form(2)
+        'other'
+        >>> Locale('ru').ordinal_form(100)
+        'other'
+        """
+        return self._data.get('ordinal_form', _default_plural_rule)
 
 
 def default_locale(category=None, aliases=LOCALE_ALIASES):
