@@ -44,6 +44,15 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.2.1.Final (07-Jan-2016)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+- Downgraded Sphinx to the latest stable (1.3.3+) for stability
+- Downgraded Jython to 2.7.0 due to an ``mkdirs`` error on Linux
+- Upgraded Pygments to the latest master (pre-2.1)
+- Upgraded Alabaster to 0.7.7
+- Upgraded reCommonMark to 0.4.0
+- Upgraded Babel to 2.2.0
+
 1.2.0.Final (05-Dec-2015)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 - Added `sphinxcontrib-inlinesyntaxhighlight`_ extension
@@ -52,8 +61,8 @@ heavy lifting. This fork includes the following additional changes:
   - ``javasphinx-apidoc`` support has not been added back, because I'm not convinced it's more useful than
     Javadoc
 
-- Updated Sphinx to the latest master (1.3.3)
-- Updated Pygments to the latest master
+- Updated Sphinx to the latest master (1.4.0a+)
+- Updated Pygments to the latest master (pre-2.1)
 
 1.1.0.Final (25-Nov-2015)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
