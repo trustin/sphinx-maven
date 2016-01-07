@@ -15,7 +15,7 @@ import collections
 import inspect
 import re
 
-from six import string_types, u
+from six import string_types
 from six.moves import range
 
 from sphinx.ext.napoleon.iterators import modify_iter
@@ -30,14 +30,16 @@ _xref_regex = re.compile(r'(:\w+:\S+:`.+?`|:\S+:`.+?`|`.+?`)')
 
 
 class GoogleDocstring(UnicodeMixin):
-    """Convert Google style docstrings to reStructuredText.
+    """Parse Google style docstrings.
+
+    Convert Google style docstrings to reStructuredText.
 
     Parameters
     ----------
-    docstring : str or List[str]
+    docstring : str or list of str
         The docstring to parse, given either as a string or split into
         individual lines.
-    config : Optional[sphinx.ext.napoleon.Config or sphinx.config.Config]
+    config : sphinx.ext.napoleon.Config or sphinx.config.Config, optional
         The configuration settings to use. If not given, defaults to the
         config object on `app`; or if `app` is not given defaults to the
         a new `sphinx.ext.napoleon.Config` object.
@@ -48,17 +50,17 @@ class GoogleDocstring(UnicodeMixin):
 
     Other Parameters
     ----------------
-    app : Optional[sphinx.application.Sphinx]
+    app : sphinx.application.Sphinx, optional
         Application object representing the Sphinx process.
-    what : Optional[str]
+    what : str, optional
         A string specifying the type of the object to which the docstring
         belongs. Valid values: "module", "class", "exception", "function",
         "method", "attribute".
-    name : Optional[str]
+    name : str, optional
         The fully qualified name of the object.
     obj : module, class, exception, function, method, or attribute
         The object to which the docstring belongs.
-    options : Optional[sphinx.ext.autodoc.Options]
+    options : sphinx.ext.autodoc.Options, optional
         The options given to the directive: an object with attributes
         inherited_members, undoc_members, show_inheritance and noindex that
         are True if the flag option of same name was given to the auto
@@ -144,7 +146,6 @@ class GoogleDocstring(UnicodeMixin):
                 'raises': self._parse_raises_section,
                 'references': self._parse_references_section,
                 'see also': self._parse_see_also_section,
-                'todo': self._parse_todo_section,
                 'warning': self._parse_warning_section,
                 'warnings': self._parse_warning_section,
                 'warns': self._parse_warns_section,
@@ -162,14 +163,14 @@ class GoogleDocstring(UnicodeMixin):
             Unicode version of the docstring.
 
         """
-        return u('\n').join(self.lines())
+        return u'\n'.join(self.lines())
 
     def lines(self):
         """Return the parsed lines of the docstring in reStructuredText format.
 
         Returns
         -------
-        List[str]
+        list of str
             The lines of the docstring in a list.
 
         """
@@ -212,7 +213,10 @@ class GoogleDocstring(UnicodeMixin):
                 _name = match.group(1)
                 _type = match.group(2)
 
-        _name = self._escape_args_and_kwargs(_name)
+        if _name[:2] == '**':
+            _name = r'\*\*'+_name[2:]
+        elif _name[:1] == '*':
+            _name = r'\*'+_name[1:]
 
         if prefer_type and not _type:
             _type, _name = _name, _type
@@ -229,15 +233,6 @@ class GoogleDocstring(UnicodeMixin):
             if _name or _type or _desc:
                 fields.append((_name, _type, _desc,))
         return fields
-
-    def _consume_inline_attribute(self):
-        line = next(self._line_iter)
-        _type, colon, _desc = self._partition_field_on_colon(line)
-        if not colon:
-            _type, _desc = _desc, _type
-        _desc = [_desc] + self._dedent(self._consume_to_end())
-        _desc = self.__class__(_desc, self._config).lines()
-        return _type, _desc
 
     def _consume_returns_section(self):
         lines = self._dedent(self._consume_to_next_section())
@@ -274,12 +269,6 @@ class GoogleDocstring(UnicodeMixin):
             section = stripped_section
         return section
 
-    def _consume_to_end(self):
-        lines = []
-        while self._line_iter.has_next():
-            lines.append(next(self._line_iter))
-        return lines
-
     def _consume_to_next_section(self):
         self._consume_empty()
         lines = []
@@ -293,14 +282,6 @@ class GoogleDocstring(UnicodeMixin):
         else:
             min_indent = self._get_min_indent(lines)
             return [line[min_indent:] for line in lines]
-
-    def _escape_args_and_kwargs(self, name):
-        if name[:2] == '**':
-            return r'\*\*' + name[2:]
-        elif name[:1] == '*':
-            return r'\*' + name[1:]
-        else:
-            return name
 
     def _format_admonition(self, admonition, lines):
         lines = self._strip_empty(lines)
@@ -329,29 +310,23 @@ class GoogleDocstring(UnicodeMixin):
             return [prefix]
 
     def _format_field(self, _name, _type, _desc):
-        _desc = self._strip_empty(_desc)
-        has_desc = any(_desc)
-        separator = has_desc and ' -- ' or ''
+        separator = any([s for s in _desc]) and ' --' or ''
         if _name:
             if _type:
                 if '`' in _type:
-                    field = '**%s** (%s)%s' % (_name, _type, separator)
+                    field = ['**%s** (%s)%s' % (_name, _type, separator)]
                 else:
-                    field = '**%s** (*%s*)%s' % (_name, _type, separator)
+                    field = ['**%s** (*%s*)%s' % (_name, _type, separator)]
             else:
-                field = '**%s**%s' % (_name, separator)
+                field = ['**%s**%s' % (_name, separator)]
         elif _type:
             if '`' in _type:
-                field = '%s%s' % (_type, separator)
+                field = ['%s%s' % (_type, separator)]
             else:
-                field = '*%s*%s' % (_type, separator)
+                field = ['*%s*%s' % (_type, separator)]
         else:
-            field = ''
-
-        if has_desc:
-            return [field + _desc[0]] + _desc[1:]
-        else:
-            return [field]
+            field = []
+        return field + _desc
 
     def _format_fields(self, field_type, fields):
         field_type = ':%s:' % field_type.strip()
@@ -367,8 +342,6 @@ class GoogleDocstring(UnicodeMixin):
                     lines.extend(self._format_block(field_type + ' * ', field))
             else:
                 lines.extend(self._format_block(field_type + ' ', field))
-        if lines and lines[-1]:
-            lines.append('')
         return lines
 
     def _get_current_indent(self, peek_ahead=0):
@@ -432,11 +405,6 @@ class GoogleDocstring(UnicodeMixin):
 
     def _parse(self):
         self._parsed_lines = self._consume_empty()
-
-        if self._name and (self._what == 'attribute' or self._what == 'data'):
-            self._parsed_lines.extend(self._parse_attribute_docstring())
-            return
-
         while self._line_iter.has_next():
             if self._is_section_header():
                 try:
@@ -457,10 +425,6 @@ class GoogleDocstring(UnicodeMixin):
                     lines = self._consume_to_next_section()
             self._parsed_lines.extend(lines)
 
-    def _parse_attribute_docstring(self):
-        _type, _desc = self._consume_inline_attribute()
-        return self._format_field('', _type, _desc)
-
     def _parse_attributes_section(self, section):
         lines = []
         for _name, _type, _desc in self._consume_fields():
@@ -470,9 +434,15 @@ class GoogleDocstring(UnicodeMixin):
                 if _type:
                     lines.append(':vartype %s: %s' % (_name, _type))
             else:
-                lines.extend(['.. attribute:: ' + _name, ''])
-                field = self._format_field('', _type, _desc)
-                lines.extend(self._indent(field, 3))
+                lines.append('.. attribute:: ' + _name)
+                if _type:
+                    lines.append('')
+                    if '`' in _type:
+                        lines.append('   %s' % _type)
+                    else:
+                        lines.append('   *%s*' % _type)
+                if _desc:
+                    lines.extend([''] + self._indent(_desc, 3))
                 lines.append('')
         if self._config.napoleon_use_ivar:
             lines.append('')
@@ -545,22 +515,21 @@ class GoogleDocstring(UnicodeMixin):
         multi = len(fields) > 1
         lines = []
         for _, _type, _desc in fields:
-            _desc = self._strip_empty(_desc)
             has_desc = any(_desc)
-            separator = has_desc and ' -- ' or ''
+            sep = (_desc and _desc[0]) and ' -- ' or ''
             if _type:
                 has_refs = '`' in _type or ':' in _type
                 has_space = any(c in ' \t\n\v\f ' for c in _type)
 
                 if not has_refs and not has_space:
-                    _type = ':exc:`%s`%s' % (_type, separator)
+                    _type = ':exc:`%s`%s' % (_type, sep)
                 elif has_desc and has_space:
-                    _type = '*%s*%s' % (_type, separator)
+                    _type = '*%s*%s' % (_type, sep)
                 else:
-                    _type = '%s%s' % (_type, separator)
+                    _type = '%s%s' % (_type, sep)
 
                 if has_desc:
-                    field = [_type + _desc[0]] + _desc[1:]
+                    field = [_type] + _desc
                 else:
                     field = [_type]
             else:
@@ -603,18 +572,13 @@ class GoogleDocstring(UnicodeMixin):
             else:
                 lines.extend(self._format_block(':returns: ', field))
                 if _type and use_rtype:
-                    lines.extend([':rtype: %s' % _type, ''])
-        if lines and lines[-1]:
-            lines.append('')
+                    lines.append(':rtype: %s' % _type)
+                    lines.append('')
         return lines
 
     def _parse_see_also_section(self, section):
         lines = self._consume_to_next_section()
         return self._format_admonition('seealso', lines)
-
-    def _parse_todo_section(self, section):
-        lines = self._consume_to_next_section()
-        return self._format_admonition('todo', lines)
 
     def _parse_warning_section(self, section):
         lines = self._consume_to_next_section()
@@ -669,14 +633,16 @@ class GoogleDocstring(UnicodeMixin):
 
 
 class NumpyDocstring(GoogleDocstring):
-    """Convert NumPy style docstrings to reStructuredText.
+    """Parse NumPy style docstrings.
+
+    Convert NumPy style docstrings to reStructuredText.
 
     Parameters
     ----------
-    docstring : str or List[str]
+    docstring : str or list of str
         The docstring to parse, given either as a string or split into
         individual lines.
-    config : Optional[sphinx.ext.napoleon.Config or sphinx.config.Config]
+    config : sphinx.ext.napoleon.Config or sphinx.config.Config, optional
         The configuration settings to use. If not given, defaults to the
         config object on `app`; or if `app` is not given defaults to the
         a new `sphinx.ext.napoleon.Config` object.
@@ -687,17 +653,17 @@ class NumpyDocstring(GoogleDocstring):
 
     Other Parameters
     ----------------
-    app : Optional[sphinx.application.Sphinx]
+    app : sphinx.application.Sphinx, optional
         Application object representing the Sphinx process.
-    what : Optional[str]
+    what : str, optional
         A string specifying the type of the object to which the docstring
         belongs. Valid values: "module", "class", "exception", "function",
         "method", "attribute".
-    name : Optional[str]
+    name : str, optional
         The fully qualified name of the object.
     obj : module, class, exception, function, method, or attribute
         The object to which the docstring belongs.
-    options : Optional[sphinx.ext.autodoc.Options]
+    options : sphinx.ext.autodoc.Options, optional
         The options given to the directive: an object with attributes
         inherited_members, undoc_members, show_inheritance and noindex that
         are True if the flag option of same name was given to the auto
@@ -759,7 +725,7 @@ class NumpyDocstring(GoogleDocstring):
 
         Returns
         -------
-        List[str]
+        list of str
             The lines of the docstring in a list.
 
     """
@@ -776,7 +742,6 @@ class NumpyDocstring(GoogleDocstring):
         else:
             _name, _type = line, ''
         _name, _type = _name.strip(), _type.strip()
-        _name = self._escape_args_and_kwargs(_name)
         if prefer_type and not _type:
             _type, _name = _name, _type
         indent = self._get_indent(line)

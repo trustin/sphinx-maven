@@ -217,7 +217,7 @@ def load_theme_plugins():
         func_or_path = plugin.load()
         try:
             path = func_or_path()
-        except Exception:
+        except:
             path = func_or_path
 
         if isinstance(path, string_types):

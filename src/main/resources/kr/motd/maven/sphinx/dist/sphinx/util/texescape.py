@@ -36,7 +36,6 @@ tex_replacements = [
     ('±', r'\(\pm\)'),
     ('→', r'\(\rightarrow\)'),
     ('‣', r'\(\rightarrow\)'),
-    ('✓', r'\(\checkmark\)'),
     # used to separate -- in options
     ('﻿', r'{}'),
     # map some special Unicode characters to similar ASCII ones

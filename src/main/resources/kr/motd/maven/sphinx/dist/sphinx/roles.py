@@ -329,7 +329,7 @@ specific_docroles = {
     # links to download references
     'download': XRefRole(nodeclass=addnodes.download_reference),
     # links to documents
-    'doc': XRefRole(warn_dangling=True, innernodeclass=nodes.inline),
+    'doc': XRefRole(warn_dangling=True),
     # links to anything
     'any': AnyXRefRole(warn_dangling=True),
 

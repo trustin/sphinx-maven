@@ -20,8 +20,6 @@ from itertools import product
 
 from six import PY3, text_type, exec_
 
-NoneType = type(None)
-
 # ------------------------------------------------------------------------------
 # Python 2/3 compatibility
 

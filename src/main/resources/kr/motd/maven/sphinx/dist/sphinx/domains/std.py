@@ -585,14 +585,12 @@ class StandardDomain(Domain):
                 continue
             labels[name] = docname, labelid, sectname
 
-    def build_reference_node(self, fromdocname, builder, docname, labelid,
-                             sectname, rolename, **options):
+    def build_reference_node(self, fromdocname, builder,
+                             docname, labelid, sectname,
+                             **options):
         nodeclass = options.pop('nodeclass', nodes.reference)
         newnode = nodeclass('', '', internal=True, **options)
         innernode = nodes.inline(sectname, sectname)
-        if innernode.get('classes') is not None:
-            innernode['classes'].append('std')
-            innernode['classes'].append('std-' + rolename)
         if docname == fromdocname:
             newnode['refid'] = labelid
         else:
@@ -626,7 +624,7 @@ class StandardDomain(Domain):
                 return None
 
             return self.build_reference_node(fromdocname, builder,
-                                             docname, labelid, sectname, 'ref')
+                                             docname, labelid, sectname)
         elif typ == 'numref':
             docname, labelid = self.data['anonlabels'].get(target, ('', ''))
             if not docname:
@@ -655,7 +653,7 @@ class StandardDomain(Domain):
                 return None
 
             return self.build_reference_node(fromdocname, builder,
-                                             docname, labelid, newtitle, 'numref',
+                                             docname, labelid, newtitle,
                                              nodeclass=addnodes.number_reference,
                                              title=title)
         elif typ == 'keyword':
@@ -720,9 +718,6 @@ class StandardDomain(Domain):
         return results
 
     def get_objects(self):
-        # handle the special 'doc' reference here
-        for doc in self.env.all_docs:
-            yield (doc, clean_astext(self.env.titles[doc]), 'doc', doc, '', -1)
         for (prog, option), info in iteritems(self.data['progoptions']):
             yield (option, option, 'option', info[0], info[1], 1)
         for (type, name), info in iteritems(self.data['objects']):

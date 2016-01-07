@@ -139,7 +139,6 @@ opmap_raw = """
 { LBRACE
 } RBRACE
 @ AT
-@= ATEQUAL
 == EQEQUAL
 != NOTEQUAL
 <> NOTEQUAL

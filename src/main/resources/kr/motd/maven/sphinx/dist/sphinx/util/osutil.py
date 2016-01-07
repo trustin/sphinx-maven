@@ -151,22 +151,15 @@ no_fn_re = re.compile(r'[^a-zA-Z0-9_-]')
 def make_filename(string):
     return no_fn_re.sub('', string) or 'sphinx'
 
-
-def ustrftime(format, *args):
+if PY2:
     # strftime for unicode strings
-    if not args:
-        # If time is not specified, try to use $SOURCE_DATE_EPOCH variable
-        # See https://wiki.debian.org/ReproducibleBuilds/TimestampsProposal
-        source_date_epoch = os.getenv('SOURCE_DATE_EPOCH')
-        if source_date_epoch is not None:
-            time_struct = time.gmtime(float(source_date_epoch))
-            args = [time_struct]
-    if PY2:
+    def ustrftime(format, *args):
         # if a locale is set, the time strings are encoded in the encoding
         # given by LC_TIME; if that is available, use it
         enc = locale.getlocale(locale.LC_TIME)[1] or 'utf-8'
         return time.strftime(text_type(format).encode(enc), *args).decode(enc)
-    else:  # Py3
+else:  # Py3
+    def ustrftime(format, *args):
         # On Windows, time.strftime() and Unicode characters will raise UnicodeEncodeError.
         # http://bugs.python.org/issue8304
         try:
