@@ -7,7 +7,7 @@
 
     Gracefully adapted from the TextPress system by Armin.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import print_function
@@ -35,11 +35,13 @@ from sphinx.errors import SphinxError, SphinxWarning, ExtensionError, \
 from sphinx.domains import ObjType, BUILTIN_DOMAINS
 from sphinx.domains.std import GenericObject, Target, StandardDomain
 from sphinx.builders import BUILTIN_BUILDERS
-from sphinx.environment import BuildEnvironment, SphinxStandaloneReader
+from sphinx.environment import BuildEnvironment
+from sphinx.io import SphinxStandaloneReader
 from sphinx.util import pycompat  # noqa: imported for side-effects
 from sphinx.util import import_object
 from sphinx.util.tags import Tags
 from sphinx.util.osutil import ENOENT
+from sphinx.util.logging import is_suppressed_warning
 from sphinx.util.console import bold, lightgray, darkgray, darkgreen, \
     term_width_line
 
@@ -77,12 +79,15 @@ class Sphinx(object):
         self.next_listener_id = 0
         self._extensions = {}
         self._extension_metadata = {}
+        self._additional_source_parsers = {}
         self._listeners = {}
+        self._setting_up_extension = ['?']
         self.domains = BUILTIN_DOMAINS.copy()
         self.buildername = buildername
         self.builderclasses = BUILTIN_BUILDERS.copy()
         self.builder = None
         self.env = None
+        self.enumerable_nodes = {}
 
         self.srcdir = srcdir
         self.confdir = confdir
@@ -144,6 +149,7 @@ class Sphinx(object):
             self.setup_extension(extension)
         # the config file itself can be an extension
         if self.config.setup:
+            self._setting_up_extension = ['conf.py']
             # py31 doesn't have 'callable' function for below check
             if hasattr(self.config.setup, '__call__'):
                 self.config.setup(self)
@@ -159,7 +165,7 @@ class Sphinx(object):
 
         # check the Sphinx version if requested
         if self.config.needs_sphinx and \
-           self.config.needs_sphinx > sphinx.__display_version__[:3]:
+           self.config.needs_sphinx > sphinx.__display_version__:
             raise VersionRequirementError(
                 'This project needs at least Sphinx v%s and therefore cannot '
                 'be built with this version.' % self.config.needs_sphinx)
@@ -183,10 +189,14 @@ class Sphinx(object):
         self._init_i18n()
         # check all configuration values for permissible types
         self.config.check_types(self.warn)
+        # set up source_parsers
+        self._init_source_parsers()
         # set up the build environment
         self._init_env(freshenv)
         # set up the builder
         self._init_builder(self.buildername)
+        # set up the enumerable nodes
+        self._init_enumerable_nodes()
 
     def _init_i18n(self):
         """Load translated strings from the configured localedirs if enabled in
@@ -209,6 +219,13 @@ class Sphinx(object):
             else:
                 self.info('not available for built-in messages')
 
+    def _init_source_parsers(self):
+        for suffix, parser in iteritems(self._additional_source_parsers):
+            if suffix not in self.config.source_suffix:
+                self.config.source_suffix.append(suffix)
+            if suffix not in self.config.source_parsers:
+                self.config.source_parsers[suffix] = parser
+
     def _init_env(self, freshenv):
         if freshenv:
             self.env = BuildEnvironment(self.srcdir, self.doctreedir,
@@ -220,7 +237,7 @@ class Sphinx(object):
             try:
                 self.info(bold('loading pickled environment... '), nonl=True)
                 self.env = BuildEnvironment.frompickle(
-                    self.config, path.join(self.doctreedir, ENV_PICKLE_FILENAME))
+                    self.srcdir, self.config, path.join(self.doctreedir, ENV_PICKLE_FILENAME))
                 self.env.domains = {}
                 for domain in self.domains.keys():
                     # this can raise if the data version doesn't fit
@@ -250,6 +267,10 @@ class Sphinx(object):
                 __import__('sphinx.builders.' + mod, None, None, [cls]), cls)
         self.builder = builderclass(self)
         self.emit('builder-inited')
+
+    def _init_enumerable_nodes(self):
+        for node, settings in iteritems(self.enumerable_nodes):
+            self.env.domains['std'].enumerable_nodes[node] = settings
 
     # ---- main "build" method -------------------------------------------------
 
@@ -298,7 +319,7 @@ class Sphinx(object):
             wfile.flush()
         self.messagelog.append(message)
 
-    def warn(self, message, location=None, prefix='WARNING: '):
+    def warn(self, message, location=None, prefix='WARNING: ', type=None, subtype=None):
         """Emit a warning.
 
         If *location* is given, it should either be a tuple of (docname, lineno)
@@ -306,12 +327,17 @@ class Sphinx(object):
 
         *prefix* usually should not be changed.
 
+        *type* and *subtype* are used to suppress warnings with :confval:`suppress_warnings`.
+
         .. note::
 
            For warnings emitted during parsing, you should use
            :meth:`.BuildEnvironment.warn` since that will collect all
            warnings during parsing for later output.
         """
+        if is_suppressed_warning(type, subtype, self.config.suppress_warnings):
+            return
+
         if isinstance(location, tuple):
             docname, lineno = location
             if docname:
@@ -427,6 +453,7 @@ class Sphinx(object):
         self.debug('[app] setting up extension: %r', extension)
         if extension in self._extensions:
             return
+        self._setting_up_extension.append(extension)
         try:
             mod = __import__(extension, None, None, ['setup'])
         except ImportError as err:
@@ -461,6 +488,7 @@ class Sphinx(object):
             ext_meta = {'version': 'unknown version'}
         self._extensions[extension] = mod
         self._extension_metadata[extension] = ext_meta
+        self._setting_up_extension.pop()
 
     def require_sphinx(self, version):
         # check the Sphinx version if requested
@@ -531,13 +559,14 @@ class Sphinx(object):
                         builder.name, self.builderclasses[builder.name].__module__))
         self.builderclasses[builder.name] = builder
 
-    def add_config_value(self, name, default, rebuild):
-        self.debug('[app] adding config value: %r', (name, default, rebuild))
+    def add_config_value(self, name, default, rebuild, types=()):
+        self.debug('[app] adding config value: %r',
+                   (name, default, rebuild) + ((types,) if types else ()))
         if name in self.config.values:
             raise ExtensionError('Config value %r already present' % name)
         if rebuild in (False, True):
             rebuild = rebuild and 'env' or ''
-        self.config.values[name] = (default, rebuild)
+        self.config.values[name] = (default, rebuild, types)
 
     def add_event(self, name):
         self.debug('[app] adding event: %r', name)
@@ -551,6 +580,11 @@ class Sphinx(object):
 
     def add_node(self, node, **kwds):
         self.debug('[app] adding node: %r', (node, kwds))
+        if not kwds.pop('override', False) and \
+           hasattr(nodes.GenericNodeVisitor, 'visit_' + node.__name__):
+            self.warn('while setting up extension %s: node class %r is '
+                      'already registered, its visitors will be overridden' %
+                      (self._setting_up_extension, node.__name__))
         nodes._add_node_class_names([node.__name__])
         for key, val in iteritems(kwds):
             try:
@@ -580,6 +614,10 @@ class Sphinx(object):
             if depart:
                 setattr(translator, 'depart_'+node.__name__, depart)
 
+    def add_enumerable_node(self, node, figtype, title_getter=None, **kwds):
+        self.enumerable_nodes[node] = (figtype, title_getter)
+        self.add_node(node, **kwds)
+
     def _directive_helper(self, obj, content=None, arguments=None, **options):
         if isinstance(obj, (types.FunctionType, types.MethodType)):
             obj.content = content
@@ -595,17 +633,29 @@ class Sphinx(object):
     def add_directive(self, name, obj, content=None, arguments=None, **options):
         self.debug('[app] adding directive: %r',
                    (name, obj, content, arguments, options))
+        if name in directives._directives:
+            self.warn('while setting up extension %s: directive %r is '
+                      'already registered, it will be overridden' %
+                      (self._setting_up_extension[-1], name))
         directives.register_directive(
             name, self._directive_helper(obj, content, arguments, **options))
 
     def add_role(self, name, role):
         self.debug('[app] adding role: %r', (name, role))
+        if name in roles._roles:
+            self.warn('while setting up extension %s: role %r is '
+                      'already registered, it will be overridden' %
+                      (self._setting_up_extension[-1], name))
         roles.register_local_role(name, role)
 
     def add_generic_role(self, name, nodeclass):
         # don't use roles.register_generic_role because it uses
         # register_canonical_role
         self.debug('[app] adding generic role: %r', (name, nodeclass))
+        if name in roles._roles:
+            self.warn('while setting up extension %s: role %r is '
+                      'already registered, it will be overridden' %
+                      (self._setting_up_extension[-1], name))
         role = roles.GenericRole(name, nodeclass)
         roles.register_local_role(name, role)
 
@@ -729,6 +779,10 @@ class Sphinx(object):
         from sphinx.search import languages, SearchLanguage
         assert issubclass(cls, SearchLanguage)
         languages[cls.lang] = cls
+
+    def add_source_parser(self, suffix, parser):
+        self.debug('[app] adding search source_parser: %r, %r', (suffix, parser))
+        self._additional_source_parsers[suffix] = parser
 
 
 class TemplateBridge(object):

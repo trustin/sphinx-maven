@@ -44,6 +44,26 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.3.0.Final (01-Apr-2016)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+- Upgraded Sphinx to 1.4.0
+
+  - Added imagesize 0.7.0
+
+- Upgraded Pygments to 2.1.3
+- Upgraded pytz to 2016.3
+- Upgraded CommonMark to the latest master (0.6.3+)
+
+  - Added future 0.15.2 (``builtins`` only)
+
+- Upgraded reCommonMark to the latest master (0.4.0+)
+
+  - Fixed the issues with renames in CommonMark
+
+- Upgraded PlantUML to 8037
+- Updated sphinx_rtd_theme to the latest master
+- Updated sphinxcontrib/plantuml to the latest master
+
 1.2.1.Final (07-Jan-2016)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 - Downgraded Sphinx to the latest stable (1.3.3+) for stability

@@ -7,7 +7,7 @@
     Sphinx's HTML writer -- requires the MathJax JavaScript library on your
     webserver/computer.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -30,26 +30,29 @@ def html_visit_displaymath(self, node):
     self.body.append(self.starttag(node, 'div', CLASS='math'))
     if node['nowrap']:
         self.body.append(self.builder.config.mathjax_display[0] +
-                         node['latex'] +
+                         self.encode(node['latex']) +
                          self.builder.config.mathjax_display[1])
         self.body.append('</div>')
         raise nodes.SkipNode
 
+    # necessary to e.g. set the id property correctly
+    if node['number']:
+        self.body.append('<span class="eqno">(%s)</span>' % node['number'])
+    self.body.append(self.builder.config.mathjax_display[0])
     parts = [prt for prt in node['latex'].split('\n\n') if prt.strip()]
+    if len(parts) > 1:  # Add alignment if there are more than 1 equation
+        self.body.append(r' \begin{align}\begin{aligned}')
     for i, part in enumerate(parts):
         part = self.encode(part)
-        if i == 0:
-            # necessary to e.g. set the id property correctly
-            if node['number']:
-                self.body.append('<span class="eqno">(%s)</span>' %
-                                 node['number'])
-        if '&' in part or '\\\\' in part:
-            self.body.append(self.builder.config.mathjax_display[0] +
-                             '\\begin{split}' + part + '\\end{split}' +
-                             self.builder.config.mathjax_display[1])
+        if r'\\' in part:
+            self.body.append(r'\begin{split}' + part + r'\end{split}')
         else:
-            self.body.append(self.builder.config.mathjax_display[0] + part +
-                             self.builder.config.mathjax_display[1])
+            self.body.append(part)
+        if i < len(parts) - 1:  # append new line if not the last equation
+            self.body.append(r'\\')
+    if len(parts) > 1:  # Add alignment if there are more than 1 equation
+        self.body.append(r'\end{aligned}\end{align} ')
+    self.body.append(self.builder.config.mathjax_display[1])
     self.body.append('</div>\n')
     raise nodes.SkipNode
 

@@ -6,7 +6,7 @@
     Build HTML help support files.
     Parts adapted from Python's Doc/tools/prechm.py.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import print_function
@@ -299,7 +299,7 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
                         write_index(subitem[0], subitem[1], [])
                     f.write('</UL>')
             for (key, group) in index:
-                for title, (refs, subitems) in group:
+                for title, (refs, subitems, key_) in group:
                     write_index(title, refs, subitems)
             f.write('</UL>\n')
         finally:

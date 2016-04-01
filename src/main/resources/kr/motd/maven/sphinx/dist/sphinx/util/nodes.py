@@ -5,7 +5,7 @@
 
     Docutils node-related utility functions for Sphinx.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -47,8 +47,10 @@ def apply_source_workaround(node):
         node.line = definition_list_item.line - 1
         node.rawsource = node.astext()  # set 'classifier1' (or 'classifier2')
     if isinstance(node, nodes.term):
-        # overwrite: ``term : classifier1 : classifier2`` -> ``term text``
-        node.rawsource = node.astext()
+        # strip classifier from rawsource of term
+        for classifier in reversed(node.parent.traverse(nodes.classifier)):
+            node.rawsource = re.sub(
+                '\s*:\s*%s' % re.escape(classifier.astext()), '', node.rawsource)
 
     # workaround: recommonmark-0.2.0 doesn't set rawsource attribute
     if not node.rawsource:
@@ -139,9 +141,10 @@ def find_source_node(node):
             return pnode.source
 
 
-def traverse_parent(node):
+def traverse_parent(node, cls=None):
     while node:
-        yield node
+        if cls is None or isinstance(node, cls):
+            yield node
         node = node.parent
 
 
@@ -210,7 +213,7 @@ def process_index_entry(entry, targetid):
         if entry.startswith(type+':'):
             value = entry[len(type)+1:].strip()
             value = pairindextypes[type] + '; ' + value
-            indexentries.append(('pair', value, targetid, main))
+            indexentries.append(('pair', value, targetid, main, None))
             break
     else:
         for type in indextypes:
@@ -218,7 +221,7 @@ def process_index_entry(entry, targetid):
                 value = entry[len(type)+1:].strip()
                 if type == 'double':
                     type = 'pair'
-                indexentries.append((type, value, targetid, main))
+                indexentries.append((type, value, targetid, main, None))
                 break
         # shorthand notation for single entries
         else:
@@ -230,7 +233,7 @@ def process_index_entry(entry, targetid):
                     value = value[1:].lstrip()
                 if not value:
                     continue
-                indexentries.append(('single', value, targetid, main))
+                indexentries.append(('single', value, targetid, main, None))
     return indexentries
 
 
@@ -290,9 +293,13 @@ def set_role_source_info(inliner, lineno, node):
     node.source, node.line = inliner.reporter.get_source_and_line(lineno)
 
 
-# monkey-patch Element.copy to copy the rawsource
+# monkey-patch Element.copy to copy the rawsource and line
 
 def _new_copy(self):
-    return self.__class__(self.rawsource, **self.attributes)
+    newnode = self.__class__(self.rawsource, **self.attributes)
+    if isinstance(self, nodes.Element):
+        newnode.source = self.source
+        newnode.line = self.line
+    return newnode
 
 nodes.Element.copy = _new_copy

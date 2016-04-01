@@ -5,7 +5,7 @@
 
     The C language domain.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -206,7 +206,7 @@ class CObject(ObjectDescription):
         indextext = self.get_index_text(name)
         if indextext:
             self.indexnode['entries'].append(('single', indextext,
-                                              targetname, ''))
+                                              targetname, '', None))
 
     def before_content(self):
         self.typename_set = False

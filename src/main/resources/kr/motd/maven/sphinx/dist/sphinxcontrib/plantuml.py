@@ -57,7 +57,9 @@ class UmlDirective(Directive):
         # XXX maybe this should be moved to _visit_plantuml functions. it
         # seems wrong to insert "figure" node by "plantuml" directive.
         if 'caption' in self.options or 'align' in self.options:
-            node = nodes.figure('', node, align=self.options.get('align'))
+            node = nodes.figure('', node)
+            if 'align' in self.options:
+                node['align'] = self.options['align']
         if 'caption' in self.options:
             import docutils.statemachine
             cnode = nodes.Element()  # anonymous container for parsing
@@ -311,3 +313,5 @@ def setup(app):
     if 'rst2pdf.pdfbuilder' in app.config.extensions:
         from rst2pdf.pdfbuilder import PDFTranslator as translator
         setattr(translator, 'visit_' + plantuml.__name__, pdf_visit_plantuml)
+
+    return {'parallel_read_safe': True}

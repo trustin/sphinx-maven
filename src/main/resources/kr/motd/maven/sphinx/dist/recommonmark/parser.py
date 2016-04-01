@@ -3,7 +3,7 @@ import itertools
 
 from docutils import parsers, nodes
 
-from CommonMark import DocParser, HTMLRenderer
+from CommonMark import Parser, HtmlRenderer
 from warnings import warn
 
 __all__ = ['CommonMarkParser']
@@ -80,7 +80,7 @@ class CommonMarkParser(parsers.Parser):
         self.current_node = document
         self.section_handler = _SectionHandler(document)
 
-        parser = DocParser()
+        parser = Parser()
 
         ast = parser.parse(inputstring + '\n')
 
@@ -97,28 +97,27 @@ class CommonMarkParser(parsers.Parser):
 
     # Blocks
     def section(self, block):
-        new_section = nodes.section()
+        new_section = nodes.section(' '.join(block.strings))
         new_section.line = block.start_line
         new_section['level'] = block.level
 
-        title_node = nodes.title()
+        title_node = nodes.title(' '.join(block.strings))
         title_node.line = block.start_line
         append_inlines(title_node, block.inline_content)
         new_section.append(title_node)
         name = nodes.fully_normalize_name(title_node.astext())
         new_section['names'].append(name)
         self.current_node.document.note_implicit_target(new_section, new_section)
-        new_section['ids'].append(nodes.make_id(name))
 
         self.section_handler.add_new_section(new_section, block.level)
         self.current_node = new_section
 
     def verbatim(self, text):
-        verbatim_node = nodes.literal_block()
+        verbatim_node = nodes.literal_block(text)
         text = ''.join(flatten(text))
         if text.endswith('\n'):
             text = text[:-1]
-        verbatim_node.append(nodes.Text(text))
+        verbatim_node.append(nodes.Text(text, text))
         self.current_node.append(verbatim_node)
 
     def code(self, language, text):
@@ -126,44 +125,46 @@ class CommonMarkParser(parsers.Parser):
         self.current_node.append(node)
 
     def paragraph(self, block):
-        p = nodes.paragraph()
+        p = nodes.paragraph(' '.join(block.strings))
         p.line = block.start_line
         append_inlines(p, block.inline_content)
         self.current_node.append(p)
 
     def blockquote(self, block):
-        q = nodes.block_quote()
+        q = nodes.block_quote(' '.join(block.strings))
         q.line = block.start_line
+
+        self.current_node.append(q)
 
         with self._temp_current_node(q):
             self.convert_blocks(block.children)
 
-        self.current_node.append(q)
-
     def list_item(self, block):
-        node = nodes.list_item()
+        node = nodes.list_item(' '.join(block.strings))
         node.line = block.start_line
+
+        self.current_node.append(node)
 
         with self._temp_current_node(node):
             self.convert_blocks(block.children)
 
-        self.current_node.append(node)
-
     def list_block(self, block):
         list_node = None
         if (block.list_data['type'] == "Bullet"):
-            list_node = nodes.bullet_list()
+            list_node_cls = nodes.bullet_list
         else:
-            list_node = nodes.enumerated_list()
+            list_node_cls = nodes.enumerated_list
+        list_node = list_node_cls(' '.join(block.strings))
         list_node.line = block.start_line
+
+        self.current_node.append(list_node)
 
         with self._temp_current_node(list_node):
             self.convert_blocks(block.children)
 
-        self.current_node.append(list_node)
-
     def html_block(self, block):
-        raw_node = nodes.raw('', block.string_content, format='html')
+        raw_node = nodes.raw(' '.join(block.strings),
+                             block.string_content, format='html')
         raw_node.line = block.start_line
         self.current_node.append(raw_node)
 
@@ -220,7 +221,7 @@ def inline_html(inline):
 
 
 def inline_entity(inline):
-    val = HTMLRenderer().renderInline(inline)
+    val = HtmlRenderer().renderInline(inline)
     entity_node = nodes.paragraph('', val, format='html')
     return entity_node
 
@@ -263,7 +264,7 @@ def parse_inline(parent_node, inline):
     elif (inline.t == "Softbreak"):
         node = nodes.Text('\n')
     elif inline.t == "Emph":
-        node = emph(inline.c)
+        node = emph(inline.c)  # noqa
     elif inline.t == "Strong":
         node = strong(inline.c)
     elif inline.t == "Link":
@@ -284,5 +285,5 @@ def parse_inline(parent_node, inline):
 
 
 def append_inlines(parent_node, inlines):
-    for i in range(len(inlines)):
-        parse_inline(parent_node, inlines[i])
+    for line in inlines:
+        parse_inline(parent_node, line)

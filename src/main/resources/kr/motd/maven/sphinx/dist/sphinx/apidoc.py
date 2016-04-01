@@ -11,7 +11,7 @@
     Copyright 2008 Société des arts technologiques (SAT),
     http://www.sat.qc.ca/
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import print_function
@@ -383,3 +383,7 @@ Note: By default this script will not overwrite already created files.""")
             qs.generate(d, silent=True, overwrite=opts.force)
     elif not opts.notoc:
         create_modules_toc_file(modules, opts)
+
+# So program can be started with "python -m sphinx.apidoc ..."
+if __name__ == "__main__":
+    main()

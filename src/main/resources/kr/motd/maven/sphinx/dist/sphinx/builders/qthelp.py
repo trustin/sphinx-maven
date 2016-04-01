@@ -5,7 +5,7 @@
 
     Build input files for the Qt collection generator.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -148,7 +148,7 @@ class QtHelpBuilder(StandaloneHTMLBuilder):
         keywords = []
         index = self.env.create_index(self, group_entries=False)
         for (key, group) in index:
-            for title, (refs, subitems) in group:
+            for title, (refs, subitems, key_) in group:
                 keywords.extend(self.build_keywords(title, refs, subitems))
         keywords = u'\n'.join(keywords)
 

@@ -5,7 +5,7 @@
 
     Global creation environment.
 
-    :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -16,32 +16,32 @@ import time
 import types
 import bisect
 import codecs
-import imghdr
 import string
 import unicodedata
 from os import path
 from glob import glob
 from itertools import groupby
 
-from six import iteritems, itervalues, text_type, class_types, string_types, next
+from six import iteritems, itervalues, text_type, class_types, next
 from six.moves import cPickle as pickle
 from docutils import nodes
-from docutils.io import FileInput, NullOutput
+from docutils.io import NullOutput
 from docutils.core import Publisher
 from docutils.utils import Reporter, relative_path, get_source_line
-from docutils.readers import standalone
 from docutils.parsers.rst import roles, directives
 from docutils.parsers.rst.languages import en as english
 from docutils.parsers.rst.directives.html import MetaBody
-from docutils.writers import UnfilteredWriter
 from docutils.frontend import OptionParser
 
 from sphinx import addnodes
+from sphinx.io import SphinxStandaloneReader, SphinxDummyWriter, SphinxFileInput
 from sphinx.util import url_re, get_matching_docs, docname_join, split_into, \
-    FilenameUniqDict, get_figtype, import_object
+    FilenameUniqDict, split_index_msg
 from sphinx.util.nodes import clean_astext, make_refnode, WarningStream, is_translatable
-from sphinx.util.osutil import SEP, getcwd, fs_encoding
-from sphinx.util.i18n import find_catalog_files
+from sphinx.util.osutil import SEP, getcwd, fs_encoding, ensuredir
+from sphinx.util.images import guess_mimetype
+from sphinx.util.i18n import find_catalog_files, get_image_filename_for_language, \
+    search_image_for_language
 from sphinx.util.console import bold, purple
 from sphinx.util.matching import compile_matchers
 from sphinx.util.parallel import ParallelTasks, parallel_available, make_chunks
@@ -49,12 +49,7 @@ from sphinx.util.websupport import is_commentable
 from sphinx.errors import SphinxError, ExtensionError
 from sphinx.locale import _
 from sphinx.versioning import add_uids, merge_doctrees
-from sphinx.transforms import (
-    DefaultSubstitutions, MoveModuleTargets, ApplySourceWorkaround,
-    HandleCodeBlocks, AutoNumbering, SortIds, CitationReferences, Locale,
-    RemoveTranslatableInline, SphinxContentsFilter, ExtraTranslatableNodes,
-)
-
+from sphinx.transforms import SphinxContentsFilter
 
 orig_role_function = roles.role
 orig_directive_function = directives.directive
@@ -80,7 +75,7 @@ default_settings = {
 # or changed to properly invalidate pickle files.
 #
 # NOTE: increase base version by 2 to have distinct numbers for Py2 and 3
-ENV_VERSION = 46 + (sys.version_info[0] - 2)
+ENV_VERSION = 47 + (sys.version_info[0] - 2)
 
 
 dummy_reporter = Reporter('', 4, 4)
@@ -97,73 +92,6 @@ class NoUri(Exception):
     pass
 
 
-class SphinxStandaloneReader(standalone.Reader):
-    """
-    Add our own transforms.
-    """
-    transforms = [ApplySourceWorkaround, ExtraTranslatableNodes, Locale, CitationReferences,
-                  DefaultSubstitutions, MoveModuleTargets, HandleCodeBlocks,
-                  AutoNumbering, SortIds, RemoveTranslatableInline]
-
-    def __init__(self, parsers={}, *args, **kwargs):
-        standalone.Reader.__init__(self, *args, **kwargs)
-        self.parser_map = {}
-        for suffix, parser_class in parsers.items():
-            if isinstance(parser_class, string_types):
-                parser_class = import_object(parser_class, 'source parser')
-            self.parser_map[suffix] = parser_class()
-
-    def read(self, source, parser, settings):
-        self.source = source
-
-        for suffix in self.parser_map:
-            if source.source_path.endswith(suffix):
-                self.parser = self.parser_map[suffix]
-                break
-
-        if not self.parser:
-            self.parser = parser
-        self.settings = settings
-        self.input = self.source.read()
-        self.parse()
-        return self.document
-
-    def get_transforms(self):
-        return standalone.Reader.get_transforms(self) + self.transforms
-
-
-class SphinxDummyWriter(UnfilteredWriter):
-    supported = ('html',)  # needed to keep "meta" nodes
-
-    def translate(self):
-        pass
-
-
-class SphinxFileInput(FileInput):
-    def __init__(self, app, env, *args, **kwds):
-        self.app = app
-        self.env = env
-        kwds['error_handler'] = 'sphinx'  # py3: handle error on open.
-        FileInput.__init__(self, *args, **kwds)
-
-    def decode(self, data):
-        if isinstance(data, text_type):  # py3: `data` already decoded.
-            return data
-        return data.decode(self.encoding, 'sphinx')  # py2: decoding
-
-    def read(self):
-        data = FileInput.read(self)
-        if self.app:
-            arg = [data]
-            self.app.emit('source-read', self.env.docname, arg)
-            data = arg[0]
-        if self.env.config.rst_epilog:
-            data = data + '\n' + self.env.config.rst_epilog + '\n'
-        if self.env.config.rst_prolog:
-            data = self.env.config.rst_prolog + '\n' + data
-        return data
-
-
 class BuildEnvironment:
     """
     The environment in which the ReST files are translated.
@@ -174,7 +102,7 @@ class BuildEnvironment:
     # --------- ENVIRONMENT PERSISTENCE ----------------------------------------
 
     @staticmethod
-    def frompickle(config, filename):
+    def frompickle(srcdir, config, filename):
         picklefile = open(filename, 'rb')
         try:
             env = pickle.load(picklefile)
@@ -182,6 +110,8 @@ class BuildEnvironment:
             picklefile.close()
         if env.version != ENV_VERSION:
             raise IOError('build environment version not current')
+        if env.srcdir != srcdir:
+            raise IOError('source directory has changed')
         env.config.values = config.values
         return env
 
@@ -312,7 +242,7 @@ class BuildEnvironment:
         self.versioning_condition = condition
         self.versioning_compare = compare
 
-    def warn(self, docname, msg, lineno=None):
+    def warn(self, docname, msg, lineno=None, **kwargs):
         """Emit a warning.
 
         This differs from using ``app.warn()`` in that the warning may not
@@ -320,11 +250,11 @@ class BuildEnvironment:
         the update of the environment.
         """
         # strange argument order is due to backwards compatibility
-        self._warnfunc(msg, (docname, lineno))
+        self._warnfunc(msg, (docname, lineno), **kwargs)
 
-    def warn_node(self, msg, node):
+    def warn_node(self, msg, node, **kwargs):
         """Like :meth:`warn`, but with source information taken from *node*."""
-        self._warnfunc(msg, '%s:%s' % get_source_line(node))
+        self._warnfunc(msg, '%s:%s' % get_source_line(node), **kwargs)
 
     def clear_doc(self, docname):
         """Remove all traces of a source file in the inventory."""
@@ -461,7 +391,7 @@ class BuildEnvironment:
             config.exclude_patterns[:] +
             config.templates_path +
             config.html_extra_path +
-            ['**/_sources', '.#*', '*.lproj/**']
+            ['**/_sources', '.#*', '**/.#*', '*.lproj/**']
         )
         self.found_docs = set(get_matching_docs(
             self.srcdir, config.source_suffix, exclude_matchers=matchers))
@@ -646,7 +576,7 @@ class BuildEnvironment:
         def read_process(docs):
             self.app = app
             self.warnings = []
-            self.set_warnfunc(lambda *args: self.warnings.append(args))
+            self.set_warnfunc(lambda *args, **kwargs: self.warnings.append((args, kwargs)))
             for docname in docs:
                 self.read_doc(docname, app)
             # allow pickling self to send it back
@@ -673,8 +603,8 @@ class BuildEnvironment:
         app.info(bold('waiting for workers...'))
         tasks.join()
 
-        for warning in warnings:
-            self._warnfunc(*warning)
+        for warning, kwargs in warnings:
+            self._warnfunc(*warning, **kwargs)
 
     def check_dependents(self, already):
         to_rewrite = self.assign_section_numbers() + self.assign_figure_numbers()
@@ -776,7 +706,7 @@ class BuildEnvironment:
         codecs.register_error('sphinx', self.warn_and_replace)
 
         # publish manually
-        reader = SphinxStandaloneReader(parsers=self.config.source_parsers)
+        reader = SphinxStandaloneReader(self.app, parsers=self.config.source_parsers)
         pub = Publisher(reader=reader,
                         writer=SphinxDummyWriter(),
                         destination_class=NullOutput)
@@ -855,9 +785,7 @@ class BuildEnvironment:
         # save the parsed doctree
         doctree_filename = self.doc2path(docname, self.doctreedir,
                                          '.doctree')
-        dirname = path.dirname(doctree_filename)
-        if not path.isdir(dirname):
-            os.makedirs(dirname)
+        ensuredir(path.dirname(doctree_filename))
         f = open(doctree_filename, 'wb')
         try:
             pickle.dump(doctree, f, pickle.HIGHEST_PROTOCOL)
@@ -957,6 +885,21 @@ class BuildEnvironment:
 
     def process_images(self, docname, doctree):
         """Process and rewrite image URIs."""
+        def collect_candidates(imgpath, candidates):
+            globbed = {}
+            for filename in glob(imgpath):
+                new_imgpath = relative_path(path.join(self.srcdir, 'dummy'),
+                                            filename)
+                try:
+                    mimetype = guess_mimetype(filename)
+                    if mimetype not in candidates:
+                        globbed.setdefault(mimetype, []).append(new_imgpath)
+                except (OSError, IOError) as err:
+                    self.warn_node('image file %s not readable: %s' %
+                                   (filename, err), node)
+            for key, files in iteritems(globbed):
+                candidates[key] = sorted(files, key=len)[0]  # select by similarity
+
         for node in doctree.traverse(nodes.image):
             # Map the mimetype to the corresponding image.  The writer may
             # choose the best image from these candidates.  The special key * is
@@ -969,30 +912,26 @@ class BuildEnvironment:
                 candidates['?'] = imguri
                 continue
             rel_imgpath, full_imgpath = self.relfn2path(imguri, docname)
+            if self.config.language:
+                # substitute figures (ex. foo.png -> foo.en.png)
+                i18n_full_imgpath = search_image_for_language(full_imgpath, self)
+                if i18n_full_imgpath != full_imgpath:
+                    full_imgpath = i18n_full_imgpath
+                    rel_imgpath = relative_path(path.join(self.srcdir, 'dummy'),
+                                                i18n_full_imgpath)
             # set imgpath as default URI
             node['uri'] = rel_imgpath
             if rel_imgpath.endswith(os.extsep + '*'):
-                for filename in glob(full_imgpath):
-                    new_imgpath = relative_path(path.join(self.srcdir, 'dummy'),
-                                                filename)
-                    if filename.lower().endswith('.pdf'):
-                        candidates['application/pdf'] = new_imgpath
-                    elif filename.lower().endswith('.svg'):
-                        candidates['image/svg+xml'] = new_imgpath
-                    else:
-                        try:
-                            f = open(filename, 'rb')
-                            try:
-                                imgtype = imghdr.what(f)
-                            finally:
-                                f.close()
-                        except (OSError, IOError) as err:
-                            self.warn_node('image file %s not readable: %s' %
-                                           (filename, err), node)
-                        if imgtype:
-                            candidates['image/' + imgtype] = new_imgpath
+                if self.config.language:
+                    # Search language-specific figures at first
+                    i18n_imguri = get_image_filename_for_language(imguri, self)
+                    _, full_i18n_imgpath = self.relfn2path(i18n_imguri, docname)
+                    collect_candidates(full_i18n_imgpath, candidates)
+
+                collect_candidates(full_imgpath, candidates)
             else:
                 candidates['*'] = rel_imgpath
+
             # map image paths to unique image names (so that they can be put
             # into a single directory)
             for imgpath in itervalues(candidates):
@@ -1123,7 +1062,19 @@ class BuildEnvironment:
     def note_indexentries_from(self, docname, document):
         entries = self.indexentries[docname] = []
         for node in document.traverse(addnodes.index):
-            entries.extend(node['entries'])
+            try:
+                for entry in node['entries']:
+                    split_index_msg(entry[0], entry[1])
+            except ValueError as exc:
+                self.warn_node(exc, node)
+                node.parent.remove(node)
+            else:
+                for entry in node['entries']:
+                    if len(entry) == 5:
+                        # Since 1.4: new index structure including index_key (5th column)
+                        entries.append(entry)
+                    else:
+                        entries.append(entry + (None,))
 
     def note_citations_from(self, docname, document):
         for node in document.traverse(nodes.citation):
@@ -1594,7 +1545,7 @@ class BuildEnvironment:
                   (node['refdomain'], typ)
         else:
             msg = '%r reference target not found: %%(target)s' % typ
-        self.warn_node(msg % {'target': target}, node)
+        self.warn_node(msg % {'target': target}, node, type='ref', subtype=typ)
 
     def _resolve_doc_reference(self, builder, node, contnode):
         # directly reference to document by source name;
@@ -1606,7 +1557,8 @@ class BuildEnvironment:
                 caption = node.astext()
             else:
                 caption = clean_astext(self.titles[docname])
-            innernode = nodes.emphasis(caption, caption)
+            innernode = nodes.inline(caption, caption)
+            innernode['classes'].append('doc')
             newnode = nodes.reference('', '', internal=True)
             newnode['refuri'] = builder.get_relative_uri(node['refdoc'], docname)
             newnode.append(innernode)
@@ -1655,7 +1607,7 @@ class BuildEnvironment:
                 for role in domain.roles:
                     res = domain.resolve_xref(self, refdoc, builder, role, target,
                                               node, contnode)
-                    if res:
+                    if res and isinstance(res[0], nodes.Element):
                         results.append(('%s:%s' % (domain.name, role), res))
         # now, see how many matches we got...
         if not results:
@@ -1792,12 +1744,7 @@ class BuildEnvironment:
             fignumbers = self.toc_fignumbers[docname].setdefault(figtype, {})
             figure_id = fignode['ids'][0]
 
-            if (isinstance(fignode, nodes.image) and
-               isinstance(fignode.parent, nodes.figure) and
-               fignode.parent['ids']):
-                fignumbers[figure_id] = fignumbers[fignode.parent['ids'][0]]
-            else:
-                fignumbers[figure_id] = get_next_fignumber(figtype, secnum)
+            fignumbers[figure_id] = get_next_fignumber(figtype, secnum)
 
         def _walk_doctree(docname, doctree, secnum):
             for subnode in doctree.children:
@@ -1818,7 +1765,7 @@ class BuildEnvironment:
 
                     continue
 
-                figtype = get_figtype(subnode)
+                figtype = self.domains['std'].get_figtype(subnode)
                 if figtype and subnode['ids']:
                     register_fignumber(docname, secnum, figtype, subnode)
 
@@ -1843,16 +1790,16 @@ class BuildEnvironment:
         """Create the real index from the collected index entries."""
         new = {}
 
-        def add_entry(word, subword, link=True, dic=new):
+        def add_entry(word, subword, link=True, dic=new, key=None):
             # Force the word to be unicode if it's a ASCII bytestring.
             # This will solve problems with unicode normalization later.
             # For instance the RFC role will add bytestrings at the moment
             word = text_type(word)
             entry = dic.get(word)
             if not entry:
-                dic[word] = entry = [[], {}]
+                dic[word] = entry = [[], {}, key]
             if subword:
-                add_entry(subword, '', link=link, dic=entry[1])
+                add_entry(subword, '', link=link, dic=entry[1], key=key)
             elif link:
                 try:
                     uri = builder.get_relative_uri('genindex', fn) + '#' + tid
@@ -1864,7 +1811,7 @@ class BuildEnvironment:
 
         for fn, entries in iteritems(self.indexentries):
             # new entry types must be listed in directives/other.py!
-            for type, value, tid, main in entries:
+            for type, value, tid, main, index_key in entries:
                 try:
                     if type == 'single':
                         try:
@@ -1872,22 +1819,24 @@ class BuildEnvironment:
                         except ValueError:
                             entry, = split_into(1, 'single', value)
                             subentry = ''
-                        add_entry(entry, subentry)
+                        add_entry(entry, subentry, key=index_key)
                     elif type == 'pair':
                         first, second = split_into(2, 'pair', value)
-                        add_entry(first, second)
-                        add_entry(second, first)
+                        add_entry(first, second, key=index_key)
+                        add_entry(second, first, key=index_key)
                     elif type == 'triple':
                         first, second, third = split_into(3, 'triple', value)
-                        add_entry(first, second+' '+third)
-                        add_entry(second, third+', '+first)
-                        add_entry(third, first+' '+second)
+                        add_entry(first, second+' '+third, key=index_key)
+                        add_entry(second, third+', '+first, key=index_key)
+                        add_entry(third, first+' '+second, key=index_key)
                     elif type == 'see':
                         first, second = split_into(2, 'see', value)
-                        add_entry(first, _('see %s') % second, link=False)
+                        add_entry(first, _('see %s') % second, link=False,
+                                  key=index_key)
                     elif type == 'seealso':
                         first, second = split_into(2, 'see', value)
-                        add_entry(first, _('see also %s') % second, link=False)
+                        add_entry(first, _('see also %s') % second, link=False,
+                                  key=index_key)
                     else:
                         self.warn(fn, 'unknown index entry type %r' % type)
                 except ValueError as err:
@@ -1916,7 +1865,7 @@ class BuildEnvironment:
             oldsubitems = None
             i = 0
             while i < len(newlist):
-                key, (targets, subitems) = newlist[i]
+                key, (targets, subitems, _key) = newlist[i]
                 # cannot move if it has subitems; structure gets too complex
                 if not subitems:
                     m = _fixre.match(key)
@@ -1924,7 +1873,7 @@ class BuildEnvironment:
                         if oldkey == m.group(1):
                             # prefixes match: add entry as subitem of the
                             # previous entry
-                            oldsubitems.setdefault(m.group(2), [[], {}])[0].\
+                            oldsubitems.setdefault(m.group(2), [[], {}, _key])[0].\
                                 extend(targets)
                             del newlist[i]
                             continue
@@ -1938,14 +1887,17 @@ class BuildEnvironment:
         def keyfunc2(item, letters=string.ascii_uppercase + '_'):
             # hack: mutating the subitems dicts to a list in the keyfunc
             k, v = item
-            v[1] = sorted((si, se) for (si, (se, void)) in iteritems(v[1]))
-            # now calculate the key
-            letter = unicodedata.normalize('NFD', k[0])[0].upper()
-            if letter in letters:
-                return letter
+            v[1] = sorted((si, se) for (si, (se, void, void)) in iteritems(v[1]))
+            if v[2] is None:
+                # now calculate the key
+                letter = unicodedata.normalize('NFD', k[0])[0].upper()
+                if letter in letters:
+                    return letter
+                else:
+                    # get all other symbols under one heading
+                    return _('Symbols')
             else:
-                # get all other symbols under one heading
-                return _('Symbols')
+                return v[2]
         return [(key_, list(group))
                 for (key_, group) in groupby(newlist, keyfunc2)]
 

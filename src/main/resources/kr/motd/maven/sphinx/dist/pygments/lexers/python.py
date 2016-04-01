@@ -213,6 +213,26 @@ class Python3Lexer(RegexLexer):
 
     uni_name = "[%s][%s]*" % (uni.xid_start, uni.xid_continue)
 
+    def innerstring_rules(ttype):
+        return [
+            # the old style '%s' % (...) string formatting (still valid in Py3)
+            (r'%(\(\w+\))?[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?'
+             '[hlL]?[diouxXeEfFgGcrs%]', String.Interpol),
+            # the new style '{}'.format(...) string formatting
+            (r'\{'
+             '((\w+)((\.\w+)|(\[[^\]]+\]))*)?' # field name
+             '(\![sra])?'                      # conversion
+             '(\:(.?[<>=\^])?[-+ ]?#?0?(\d+)?,?(\.\d+)?[bcdeEfFgGnosxX%]?)?'
+             '\}', String.Interpol),
+
+            # backslashes, quotes and formatting signs must be parsed one at a time
+            (r'[^\\\'"%\{\n]+', ttype),
+            (r'[\'"\\]', ttype),
+            # unhandled string formatting sign
+            (r'%|(\{{1,2})', ttype)
+            # newlines are an error (use "nl" state)
+        ]
+
     tokens = PythonLexer.tokens.copy()
     tokens['keywords'] = [
         (words((
@@ -295,23 +315,8 @@ class Python3Lexer(RegexLexer):
         (uni_name, Name.Namespace),
         default('#pop'),
     ]
-    tokens['strings'] = [
-        # the old style '%s' % (...) string formatting (still valid in Py3)
-        (r'%(\(\w+\))?[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?'
-         '[hlL]?[diouxXeEfFgGcrs%]', String.Interpol),
-        # the new style '{}'.format(...) string formatting
-        (r'\{'
-         '((\w+)((\.\w+)|(\[[^\]]+\]))*)?' # field name
-         '(\![sra])?'                      # conversion
-         '(\:(.?[<>=\^])?[-+ ]?#?0?(\d+)?,?(\.\d+)?[bcdeEfFgGnosxX%]?)?'
-         '\}', String.Interpol),
-        # backslashes, quotes and formatting signs must be parsed one at a time
-        (r'[^\\\'"%\{\n]+', String),
-        (r'[\'"\\]', String),
-        # unhandled string formatting sign
-        (r'%|(\{{1,2})', String)
-        # newlines are an error (use "nl" state)
-    ]
+    tokens['strings-single'] = innerstring_rules(String.Single)
+    tokens['strings-double'] = innerstring_rules(String.Double)
 
     def analyse_text(text):
         return shebang_matches(text, r'pythonw?3(\.\d)?')
@@ -515,6 +520,8 @@ class CythonLexer(RegexLexer):
             include('keywords'),
             (r'(def|property)(\s+)', bygroups(Keyword, Text), 'funcname'),
             (r'(cp?def)(\s+)', bygroups(Keyword, Text), 'cdef'),
+            # (should actually start a block with only cdefs)
+            (r'(cdef)(:)', bygroups(Keyword, Punctuation)),
             (r'(class|struct)(\s+)', bygroups(Keyword, Text), 'classname'),
             (r'(from)(\s+)', bygroups(Keyword, Text), 'fromimport'),
             (r'(c?import)(\s+)', bygroups(Keyword, Text), 'import'),
@@ -534,7 +541,7 @@ class CythonLexer(RegexLexer):
         'keywords': [
             (words((
                 'assert', 'break', 'by', 'continue', 'ctypedef', 'del', 'elif',
-                'else', 'except', 'except?', 'exec', 'finally', 'for', 'gil',
+                'else', 'except', 'except?', 'exec', 'finally', 'for', 'fused', 'gil',
                 'global', 'if', 'include', 'lambda', 'nogil', 'pass', 'print',
                 'raise', 'return', 'try', 'while', 'yield', 'as', 'with'), suffix=r'\b'),
              Keyword),
