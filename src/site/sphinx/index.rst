@@ -44,6 +44,10 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.3.2.Final-SNAPSHOT (12-Aug-2016)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+- Possibility to keep default Maven site + put documentation in "Project reports" when plugin is specified as a reporting plugin
+
 1.3.1.Final (25-Apr-2016)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 - The line separators of the generated text files are now converted to the line separator of the current platform, so that the version control systems like Git do not complain about inconsistent line endings.

@@ -25,6 +25,29 @@ import org.codehaus.doxia.sink.Sink;
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
 
+    /**
+     * Boolean to keep default site and make Sphinx doc a project report
+     */
+    @Parameter(property = "sphinx.asReport", defaultValue = "false", alias = "asReport")
+    private boolean asReport;
+
+    /**
+     * Name of the report in "Project reports" section (default Maven site)
+     */
+    @Parameter(property = "sphinx.name", defaultValue = "Sphinx-Docs", alias = "name")
+    private String name;
+
+    /**
+     * Description of the report in "Project reports" section (default Maven site)
+     */
+    @Parameter(property = "sphinx.description", defaultValue = "Documentation using Python Sphinx Package", alias = "description")
+    private String description;
+
+    /**
+     * Sub-directory to store sphinx output (used only if asReport is true)
+     */
+    private static final String sphinxSiteSubDirectory = "sphinx";
+
     private static final String[] CRUFTS = {
             "css/maven-base.css",
             "css/maven-theme.css",
@@ -57,7 +80,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      */
     @Parameter(defaultValue = "${project.reporting.outputDirectory}", required = true, readonly = true)
     private File outputDirectory;
-    
+
     /**
      * The directory for sphinx' source.
      */
@@ -101,6 +124,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         outputDirectory = canonicalize(outputDirectory);
         sphinxSourceDirectory = canonicalize(sphinxSourceDirectory);
 
+        // to avoid Maven overriding resulting index.html, update index.rst to force re-building of index
+        if(isHTMLReport()) {
+            new File(sourceDirectory.getPath() + "/index.rst").setLastModified(System.currentTimeMillis());
+        }
+
         final SphinxRunner sphinxRunner;
         try {
             sphinxRunner = new SphinxRunner(sphinxSourceDirectory, getLog());
@@ -111,7 +139,9 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         try {
             executeSphinx(sphinxRunner);
             convertLineSeparators();
-            deleteCruft();
+            // only delete crufts if Maven site is overriden (default behavior)
+            if(asReport)
+                deleteCruft();
         } catch (Exception e) {
             throw new MojoExecutionException("Failed to run the report", e);
         } finally {
@@ -270,29 +300,38 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         }
     }
 
+    private boolean isHTMLReport() { return (asReport && builder.equals("html")); }
+
     @Override
     public String getOutputName() {
+        if(isHTMLReport()) {
+            return sphinxSiteSubDirectory + "/index";   // if report, clicking on report will lead to sphinx/index.html
+        }
         return "Python-Sphinx";
     }
 
     @Override
     public String getCategoryName() {
-        return "Documentation";
+        return MavenReport.CATEGORY_PROJECT_REPORTS;
     }
 
     @Override
     public String getName(Locale locale) {
-        return "Sphinx-Docs";
+        return name;
     }
 
     @Override
     public String getDescription(Locale locale) {
-        return "Documentation using Python Sphinx Package";
+        return description;
     }
 
     @Override
     public void setReportOutputDirectory(File outputDirectory) {
-        this.outputDirectory = outputDirectory;
+        // if documentation is generated as a report
+        if(asReport) {
+            // output sphinx doc to outputDirectory/sphinx instead of outputDirectory
+            this.outputDirectory = new File(outputDirectory.getPath() + "/" + sphinxSiteSubDirectory);
+        }
     }
 
     @Override
