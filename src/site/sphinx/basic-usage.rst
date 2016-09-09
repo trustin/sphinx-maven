@@ -92,9 +92,11 @@ You can also generate the documentation as a project report in Maven default sit
         <groupId>kr.motd.maven</groupId>
         <artifactId>sphinx-maven-plugin</artifactId>
         <version>\ |release|\ </version>
-        <asReport>true</asReport>
-        <name>Project documentation</name>
-        <description>Documentation about ${project.name}</description>
+        <configuration>
+          <asReport>true</asReport>
+          <name>Project documentation</name>
+          <description>Documentation about ${project.name}</description>
+        </configuration>
       </plugin>
     </plugins>
   </reporting>
