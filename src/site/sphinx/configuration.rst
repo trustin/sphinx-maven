@@ -21,6 +21,7 @@ Parameter                Description                                            
 ``warningsAsErrors``     Whether warnings should be treated as errors.                                                     ``false``
 ``force``                Whether Sphinx should generate output for all files instead of only the changed ones.             ``false``
 ``tags``                 Additional tags to pass to Sphinx. See the `Sphinx tag documentation`_ for more information.
+``asReport``             Whether documentation should be generated as a project report (keep default Maven site).          ``false``
 ======================== ================================================================================================= ========================================
 
 Using PlantUML

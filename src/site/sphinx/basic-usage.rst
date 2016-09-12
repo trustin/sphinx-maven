@@ -34,6 +34,9 @@ For good examples of documentation, see `Sphinx' examples page`_.
 Executing within ``site`` lifecycle
 ===================================
 
+Overriding default Maven site
+-----------------------------
+
 Simply add the sphinx-maven-plugin to your ``pom.xml``:
 
 .. parsed-literal::
@@ -70,6 +73,42 @@ Now all you need to do is to generate the documentation::
   mvn site
 
 This will generate the documentation in the `target/site` folder.
+
+Generating documentation as a project report
+--------------------------------------------
+
+You can also generate the documentation as a project report in Maven default site :
+
+.. parsed-literal::
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+        <version>2.9</version>
+      </plugin>
+      <plugin>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>sphinx-maven-plugin</artifactId>
+        <version>\ |release|\ </version>
+        <configuration>
+          <asReport>true</asReport>
+          <name>Project documentation</name>
+          <description>Documentation about ${project.name}</description>
+        </configuration>
+      </plugin>
+    </plugins>
+  </reporting>
+
+Then :
+
+::
+
+  mvn site
+
+This will generate the documentation in the `target/site/sphinx` folder without affecting default Maven site (remains
+in `target/site`). You can access the documentation through "Project reports" in Maven site menu bar.
 
 Executing within normal lifecycle
 =================================
