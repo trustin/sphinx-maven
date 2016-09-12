@@ -44,8 +44,8 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
-1.4.0.Final (unreleased)
-^^^^^^^^^^^^^^^^^^^^^^^^
+1.4.0.Final (12-Sep-2016)
+^^^^^^^^^^^^^^^^^^^^^^^^^
 - Added the ``asReport`` option to keep the default Maven site
 - Upgraded Sphinx to 1.4.6
 - Upgraded alabaster to 0.7.9
