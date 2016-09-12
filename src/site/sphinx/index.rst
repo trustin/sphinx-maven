@@ -44,9 +44,17 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
-1.3.2.Final-SNAPSHOT (12-Aug-2016)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-- Possibility to keep default Maven site + put documentation in "Project reports" when plugin is specified as a reporting plugin
+1.4.0.Final (unreleased)
+^^^^^^^^^^^^^^^^^^^^^^^^
+- Added the ``asReport`` option to keep the default Maven site
+- Upgraded Sphinx to 1.4.6
+- Upgraded alabaster to 0.7.9
+- Upgraded Babel to 2.3.4
+- Upgraded CommonMark to 0.7.2
+- Upgraded imagesize to 0.7.1
+- Upgraded Pygments to 2.1.3
+- Upgraded pytz to 2016.6.1
+- Upgraded sphinx_rtd_theme to 0.1.10a0
 
 1.3.1.Final (25-Apr-2016)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
