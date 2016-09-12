@@ -26,7 +26,9 @@ from sphinx.util.pycompat import UnicodeMixin
 from sphinx.util.docfields import Field, GroupedField
 
 """
-    Important note on ids:
+    Important note on ids
+    ----------------------------------------------------------------------------
+
     Multiple id generation schemes are used due to backwards compatibility.
     - v1: 1.2.3 <= version < 1.3
           The style used before the rewrite.
@@ -37,6 +39,19 @@ from sphinx.util.docfields import Field, GroupedField
           though not completely implemented.
     All versions are generated and attached to elements. The newest is used for
     the index. All of the versions should work as permalinks.
+
+
+    Tagnames
+    ----------------------------------------------------------------------------
+
+    Each desc_signature node will have the attribute 'sphinx_cpp_tagname' set to
+    - 'templateParams', if the line is on the form 'template<...>',
+    - 'declarator', if the line contains the name of the declared object.
+    No other desc_signature nodes should exist (so far).
+
+
+    Grammar
+    ----------------------------------------------------------------------------
 
     See http://www.nongnu.org/hcb/ for the grammar,
     or https://github.com/cplusplus/draft/blob/master/source/grammar.tex
@@ -75,8 +90,13 @@ from sphinx.util.docfields import Field, GroupedField
 
         decl-specifier ->
               storage-class-specifier ->
-                    "static" (only for member_object and function_object)
+                 (  "static" (only for member_object and function_object)
+                  | "extern" (only for member_object and function_object)
                   | "register"
+                 )
+                 thread_local[opt] (only for member_object)
+                                   (it can also appear before the others)
+
             | type-specifier -> trailing-type-specifier
             | function-specifier -> "inline" | "virtual" | "explicit" (only
               for function_object)
@@ -456,6 +476,17 @@ class DefinitionError(UnicodeMixin, Exception):
         return self.description
 
 
+class _DuplicateSymbolError(UnicodeMixin, Exception):
+    def __init__(self, symbol, candSymbol):
+        assert symbol
+        assert candSymbol
+        self.symbol = symbol
+        self.candSymbol = candSymbol
+
+    def __unicode__(self):
+        return "Internal C++ duplicate symbol error:\n%s" % self.symbol.dump(0)
+
+
 class ASTBase(UnicodeMixin):
     def __eq__(self, other):
         if type(self) is not type(other):
@@ -541,7 +572,7 @@ class ASTIdentifier(ASTBase):
                                           classname=None)
             key = symbol.get_lookup_key()
             assert key
-            pnode['cpp:parentKey'] = key
+            pnode['cpp:parent_key'] = key
             pnode += nodes.Text(self.identifier)
             signode += pnode
         elif mode == 'lastIsName':
@@ -755,6 +786,7 @@ class ASTTemplateDeclarationPrefix(ASTBase):
         _verify_description_mode(mode)
         for t in self.templates:
             templateNode = addnodes.desc_signature()
+            templateNode.sphinx_cpp_tagname = 'templateParams'
             t.describe_signature(templateNode, 'lastIsName', env, symbol)
             signode += templateNode
 
@@ -1223,9 +1255,10 @@ class ASTParametersQualifiers(ASTBase):
 
 
 class ASTDeclSpecsSimple(ASTBase):
-    def __init__(self, storage, inline, virtual, explicit,
+    def __init__(self, storage, threadLocal, inline, virtual, explicit,
                  constexpr, volatile, const, friend):
         self.storage = storage
+        self.threadLocal = threadLocal
         self.inline = inline
         self.virtual = virtual
         self.explicit = explicit
@@ -1238,6 +1271,7 @@ class ASTDeclSpecsSimple(ASTBase):
         if not other:
             return self
         return ASTDeclSpecsSimple(self.storage or other.storage,
+                                  self.threadLocal or other.threadLocal,
                                   self.inline or other.inline,
                                   self.virtual or other.virtual,
                                   self.explicit or other.explicit,
@@ -1250,6 +1284,8 @@ class ASTDeclSpecsSimple(ASTBase):
         res = []
         if self.storage:
             res.append(self.storage)
+        if self.threadLocal:
+            res.append('thread_local')
         if self.inline:
             res.append('inline')
         if self.friend:
@@ -1273,6 +1309,8 @@ class ASTDeclSpecsSimple(ASTBase):
             modifiers.append(addnodes.desc_annotation(text, text))
         if self.storage:
             _add(modifiers, self.storage)
+        if self.threadLocal:
+            _add(modifiers, 'thread_local')
         if self.inline:
             _add(modifiers, 'inline')
         if self.friend:
@@ -1906,6 +1944,12 @@ class ASTType(ASTBase):
         res.append(text_type(self.decl))
         return u''.join(res)
 
+    def get_type_declaration_prefix(self):
+        if self.declSpecs.trailingTypeSpec:
+            return 'typedef'
+        else:
+            return 'type'
+
     def describe_signature(self, signode, mode, env, symbol):
         _verify_description_mode(mode)
         self.declSpecs.describe_signature(signode, 'markType', env, symbol)
@@ -1933,7 +1977,7 @@ class ASTTypeWithInit(ASTBase):
 
     def get_id_v2(self, objectType=None, symbol=None):
         if objectType == 'member':
-            return symbol.declaration.name.get_id_v2()
+            return symbol.get_full_nested_name().get_id_v2()
         else:
             return self.type.get_id_v2()
 
@@ -1969,6 +2013,9 @@ class ASTTypeUsing(ASTBase):
             res.append(' = ')
             res.append(text_type(self.type))
         return u''.join(res)
+
+    def get_type_declaration_prefix(self):
+        return 'using'
 
     def describe_signature(self, signode, mode, env, symbol):
         _verify_description_mode(mode)
@@ -2172,6 +2219,7 @@ class ASTDeclaration(ASTBase):
         # let's pop it so we can add templates before that
         parentNode = signode.parent
         mainDeclNode = signode
+        mainDeclNode.sphinx_cpp_tagname = 'declarator'
         parentNode.pop()
 
         assert self.symbol
@@ -2182,7 +2230,9 @@ class ASTDeclaration(ASTBase):
             mainDeclNode += addnodes.desc_annotation(self.visibility + " ",
                                                      self.visibility + " ")
         if self.objectType == 'type':
-            mainDeclNode += addnodes.desc_annotation('type ', 'type ')
+            prefix = self.declaration.get_type_declaration_prefix()
+            prefix += ' '
+            mainDeclNode += addnodes.desc_annotation(prefix, prefix)
         elif self.objectType == 'member':
             pass
         elif self.objectType == 'function':
@@ -2429,14 +2479,23 @@ class Symbol(object):
                 # .. class:: Test
                 symbol._fill_empty(declaration, docname)
                 return symbol
-            # it may simply be a functin overload
-            # TODO: it could be a duplicate but let's just insert anyway
-            # the id generation will warn about it
-            symbol = Symbol(parent=parentSymbol, identifier=identifier,
-                            templateParams=templateParams,
-                            templateArgs=templateArgs,
-                            declaration=declaration,
-                            docname=docname)
+            # It may simply be a functin overload, so let's compare ids.
+            candSymbol = Symbol(parent=parentSymbol, identifier=identifier,
+                                templateParams=templateParams,
+                                templateArgs=templateArgs,
+                                declaration=declaration,
+                                docname=docname)
+            newId = declaration.get_newest_id()
+            oldId = symbol.declaration.get_newest_id()
+            if newId != oldId:
+                # we already inserted the symbol, so return the new one
+                symbol = candSymbol
+            else:
+                # Redeclaration of the same symbol.
+                # Let the new one be there, but raise an error to the client
+                # so it can use the real symbol as subscope.
+                # This will probably result in a duplicate id warning.
+                raise _DuplicateSymbolError(symbol, candSymbol)
         else:
             symbol = Symbol(parent=parentSymbol, identifier=identifier,
                             templateParams=templateParams,
@@ -2528,7 +2587,7 @@ class Symbol(object):
             s = s._find_named_symbol(identifier, templateParams,
                                      templateArgs, operator,
                                      templateShorthand=False,
-                                     matchSelf=True)
+                                     matchSelf=False)
             if not s:
                 return None
         return s
@@ -2601,6 +2660,10 @@ class Symbol(object):
                 if symbol is None:
                     # TODO: maybe search without template args
                     return None
+                # We have now matched part of a nested name, and need to match more
+                # so even if we should matchSelf before, we definitely shouldn't
+                # even more. (see also issue #2666)
+                matchSelf = False
             parentSymbol = symbol
         assert False  # should have returned in the loop
 
@@ -2948,10 +3011,9 @@ class DefinitionParser(object):
                         self.fail('Expected ")" after "..." in '
                                   'parameters_and_qualifiers.')
                     break
-                if paramMode == 'function':
-                    arg = self._parse_type_with_init(outer=None, named='single')
-                else:
-                    arg = self._parse_type(named=False)
+                # note: it seems that function arguments can always sbe named,
+                # even in function pointers and similar.
+                arg = self._parse_type_with_init(outer=None, named='single')
                 # TODO: parse default parameters # TODO: didn't we just do that?
                 args.append(ASTFunctinoParameter(arg))
 
@@ -3022,6 +3084,7 @@ class DefinitionParser(object):
     def _parse_decl_specs_simple(self, outer, typed):
         """Just parse the simple ones."""
         storage = None
+        threadLocal = None
         inline = None
         virtual = None
         explicit = None
@@ -3036,12 +3099,19 @@ class DefinitionParser(object):
                     if self.skip_word('static'):
                         storage = 'static'
                         continue
+                    if self.skip_word('extern'):
+                        storage = 'extern'
+                        continue
                 if outer == 'member':
                     if self.skip_word('mutable'):
                         storage = 'mutable'
                         continue
                 if self.skip_word('register'):
                     storage = 'register'
+                    continue
+            if not threadLocal and outer == 'member':
+                threadLocal = self.skip_word('thread_local')
+                if threadLocal:
                     continue
 
             if outer == 'function':
@@ -3076,8 +3146,8 @@ class DefinitionParser(object):
                 if const:
                     continue
             break
-        return ASTDeclSpecsSimple(storage, inline, virtual, explicit, constexpr,
-                                  volatile, const, friend)
+        return ASTDeclSpecsSimple(storage, threadLocal, inline, virtual,
+                                  explicit, constexpr, volatile, const, friend)
 
     def _parse_decl_specs(self, outer, typed=True):
         if outer:
@@ -3667,7 +3737,7 @@ class CPPObject(ObjectDescription):
             id_v1 = None
         id_v2 = ast.get_id_v2()
         # store them in reverse order, so the newest is first
-        ids  = [id_v2, id_v1]
+        ids = [id_v2, id_v1]
 
         newestId = ids[0]
         assert newestId  # shouldn't be None
@@ -3688,8 +3758,14 @@ class CPPObject(ObjectDescription):
             else:
                 # print("[CPP] non-unique name:", name)
                 pass
-            for id in ids:
-                if id:  # is None when the element didn't exist in that version
+            # always add the newest id
+            assert newestId
+            signode['ids'].append(newestId)
+            # only add compatibility ids when there are no conflicts
+            for id in ids[1:]:
+                if not id:  # is None when the element didn't exist in that version
+                    continue
+                if id not in self.state.document.ids:
                     signode['ids'].append(id)
             signode['first'] = (not self.names)  # hmm, what is this abound?
             self.state.document.note_explicit_target(signode)
@@ -3701,10 +3777,10 @@ class CPPObject(ObjectDescription):
         raise NotImplementedError()
 
     def handle_signature(self, sig, signode):
-        if 'cpp:parentSymbol' not in self.env.ref_context:
-            root = self.env.domaindata['cpp']['rootSymbol']
-            self.env.ref_context['cpp:parentSymbol'] = root
-        parentSymbol = self.env.ref_context['cpp:parentSymbol']
+        if 'cpp:parent_symbol' not in self.env.ref_context:
+            root = self.env.domaindata['cpp']['root_symbol']
+            self.env.ref_context['cpp:parent_symbol'] = root
+        parentSymbol = self.env.ref_context['cpp:parent_symbol']
 
         parser = DefinitionParser(sig, self)
         try:
@@ -3716,16 +3792,31 @@ class CPPObject(ObjectDescription):
             # the possibly inner declarations.
             name = _make_phony_error_name()
             symbol = parentSymbol.add_name(name)
-            self.env.ref_context['cpp:lastSymbol'] = symbol
+            self.env.ref_context['cpp:last_symbol'] = symbol
             raise ValueError
-        symbol = parentSymbol.add_declaration(ast, docname=self.env.docname)
-        self.env.ref_context['cpp:lastSymbol'] = symbol
+
+        try:
+            symbol = parentSymbol.add_declaration(ast, docname=self.env.docname)
+            self.env.ref_context['cpp:last_symbol'] = symbol
+        except _DuplicateSymbolError as e:
+            # Assume we are actually in the old symbol,
+            # instead of the newly created duplicate.
+            self.env.ref_context['cpp:last_symbol'] = e.symbol
 
         if ast.objectType == 'enumerator':
             self._add_enumerator_to_parent(ast)
 
         self.describe_signature(signode, ast)
         return ast
+
+    def before_content(self):
+        lastSymbol = self.env.ref_context['cpp:last_symbol']
+        assert lastSymbol
+        self.oldParentSymbol = self.env.ref_context['cpp:parent_symbol']
+        self.env.ref_context['cpp:parent_symbol'] = lastSymbol
+
+    def after_content(self):
+        self.env.ref_context['cpp:parent_symbol'] = self.oldParentSymbol
 
 
 class CPPTypeObject(CPPObject):
@@ -3765,15 +3856,6 @@ class CPPClassObject(CPPObject):
     def get_index_text(self, name):
         return _('%s (C++ class)') % name
 
-    def before_content(self):
-        lastSymbol = self.env.ref_context['cpp:lastSymbol']
-        assert lastSymbol
-        self.oldParentSymbol = self.env.ref_context['cpp:parentSymbol']
-        self.env.ref_context['cpp:parentSymbol'] = lastSymbol
-
-    def after_content(self):
-        self.env.ref_context['cpp:parentSymbol'] = self.oldParentSymbol
-
     def parse_definition(self, parser):
         return parser.parse_declaration("class")
 
@@ -3784,15 +3866,6 @@ class CPPClassObject(CPPObject):
 class CPPEnumObject(CPPObject):
     def get_index_text(self, name):
         return _('%s (C++ enum)') % name
-
-    def before_content(self):
-        lastSymbol = self.env.ref_context['cpp:lastSymbol']
-        assert lastSymbol
-        self.oldParentSymbol = self.env.ref_context['cpp:parentSymbol']
-        self.env.ref_context['cpp:parentSymbol'] = lastSymbol
-
-    def after_content(self):
-        self.env.ref_context['cpp:parentSymbol'] = self.oldParentSymbol
 
     def parse_definition(self, parser):
         ast = parser.parse_declaration("enum")
@@ -3839,7 +3912,7 @@ class CPPNamespaceObject(Directive):
 
     def run(self):
         env = self.state.document.settings.env
-        rootSymbol = env.domaindata['cpp']['rootSymbol']
+        rootSymbol = env.domaindata['cpp']['root_symbol']
         if self.arguments[0].strip() in ('NULL', '0', 'nullptr'):
             symbol = rootSymbol
             stack = []
@@ -3854,8 +3927,8 @@ class CPPNamespaceObject(Directive):
                 ast = ASTNamespace(name, None)
             symbol = rootSymbol.add_name(ast.nestedName, ast.templatePrefix)
             stack = [symbol]
-        env.ref_context['cpp:parentSymbol'] = symbol
-        env.temp_data['cpp:namespaceStack'] = stack
+        env.ref_context['cpp:parent_symbol'] = symbol
+        env.temp_data['cpp:namespace_stack'] = stack
         return []
 
 
@@ -3881,14 +3954,14 @@ class CPPNamespacePushObject(Directive):
             self.warn(e.description)
             name = _make_phony_error_name()
             ast = ASTNamespace(name, None)
-        oldParent = env.ref_context.get('cpp:parentSymbol', None)
+        oldParent = env.ref_context.get('cpp:parent_symbol', None)
         if not oldParent:
-            oldParent = env.domaindata['cpp']['rootSymbol']
+            oldParent = env.domaindata['cpp']['root_symbol']
         symbol = oldParent.add_name(ast.nestedName, ast.templatePrefix)
-        stack = env.temp_data.get('cpp:namespaceStack', [])
+        stack = env.temp_data.get('cpp:namespace_stack', [])
         stack.append(symbol)
-        env.ref_context['cpp:parentSymbol'] = symbol
-        env.temp_data['cpp:namespaceStack'] = stack
+        env.ref_context['cpp:parent_symbol'] = symbol
+        env.temp_data['cpp:namespace_stack'] = stack
         return []
 
 
@@ -3904,7 +3977,7 @@ class CPPNamespacePopObject(Directive):
 
     def run(self):
         env = self.state.document.settings.env
-        stack = env.temp_data.get('cpp:namespaceStack', None)
+        stack = env.temp_data.get('cpp:namespace_stack', None)
         if not stack or len(stack) == 0:
             self.warn("C++ namespace pop on empty stack. Defaulting to gobal scope.")
             stack = []
@@ -3913,17 +3986,17 @@ class CPPNamespacePopObject(Directive):
         if len(stack) > 0:
             symbol = stack[-1]
         else:
-            symbol = env.domaindata['cpp']['rootSymbol']
-        env.ref_context['cpp:parentSymbol'] = symbol
-        env.temp_data['cpp:namespaceStack'] = stack
+            symbol = env.domaindata['cpp']['root_symbol']
+        env.ref_context['cpp:parent_symbol'] = symbol
+        env.temp_data['cpp:namespace_stack'] = stack
         return []
 
 
 class CPPXRefRole(XRefRole):
     def process_link(self, env, refnode, has_explicit_title, title, target):
-        parent = env.ref_context.get('cpp:parentSymbol', None)
+        parent = env.ref_context.get('cpp:parent_symbol', None)
         if parent:
-            refnode['cpp:parentKey'] = parent.get_lookup_key()
+            refnode['cpp:parent_key'] = parent.get_lookup_key()
         if refnode['reftype'] == 'any':
             # Assume the removal part of fix_parens for :any: refs.
             # The addition part is done with the reference is resolved.
@@ -3982,12 +4055,12 @@ class CPPDomain(Domain):
         'enumerator': CPPXRefRole()
     }
     initial_data = {
-        'rootSymbol': Symbol(None, None, None, None, None, None),
+        'root_symbol': Symbol(None, None, None, None, None, None),
         'names': {}  # full name for indexing -> docname
     }
 
     def clear_doc(self, docname):
-        rootSymbol = self.data['rootSymbol']
+        rootSymbol = self.data['root_symbol']
         rootSymbol.clear_doc(docname)
         for name, nDocname in list(self.data['names'].items()):
             if nDocname == docname:
@@ -3996,12 +4069,12 @@ class CPPDomain(Domain):
     def process_doc(self, env, docname, document):
         # just for debugging
         # print(docname)
-        # print(self.data['rootSymbol'].dump(0))
+        # print(self.data['root_symbol'].dump(0))
         pass
 
     def merge_domaindata(self, docnames, otherdata):
-        self.data['rootSymbol'].merge_with(otherdata['rootSymbol'],
-                                           docnames, self.env)
+        self.data['root_symbol'].merge_with(otherdata['root_symbol'],
+                                            docnames, self.env)
         ourNames = self.data['names']
         for name, docname in otherdata['names'].items():
             if docname in docnames:
@@ -4027,10 +4100,10 @@ class CPPDomain(Domain):
             parser.assert_end()
         except DefinitionError as e:
             warner.warn('Unparseable C++ cross-reference: %r\n%s'
-                        % (target, str(e.description)))
+                        % (target, text_type(e.description)))
             return None, None
-        parentKey = node.get("cpp:parentKey", None)
-        rootSymbol = self.data['rootSymbol']
+        parentKey = node.get("cpp:parent_key", None)
+        rootSymbol = self.data['root_symbol']
         if parentKey:
             parentSymbol = rootSymbol.direct_lookup(parentKey)
             if not parentSymbol:
@@ -4050,6 +4123,7 @@ class CPPDomain(Domain):
                                    matchSelf=True)
         if s is None or s.declaration is None:
             return None, None
+
         declaration = s.declaration
         fullNestedName = s.get_full_nested_name()
         name = text_type(fullNestedName).lstrip(':')
@@ -4079,7 +4153,7 @@ class CPPDomain(Domain):
         return []
 
     def get_objects(self):
-        rootSymbol = self.data['rootSymbol']
+        rootSymbol = self.data['root_symbol']
         for symbol in rootSymbol.get_all_symbols():
             if symbol.declaration is None:
                 continue

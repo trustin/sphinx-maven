@@ -59,6 +59,7 @@ class DevhelpBuilder(StandaloneHTMLBuilder):
     def init(self):
         StandaloneHTMLBuilder.init(self)
         self.out_suffix = '.html'
+        self.link_suffix = '.html'
 
     def handle_finish(self):
         self.build_devhelp(self.outdir, self.config.devhelp_basename)
@@ -123,7 +124,7 @@ class DevhelpBuilder(StandaloneHTMLBuilder):
                                 subitem[1], [])
 
         for (key, group) in index:
-            for title, (refs, subitems) in group:
+            for title, (refs, subitems, key) in group:
                 write_index(title, refs, subitems)
 
         # Dump the XML file

@@ -1,74 +1,60 @@
-#!/usr/bin/env python
-# 2014 - Bibek Kafle & Roland Shoemaker
-# Port of @jgm's JavaScript stmd.js implementation of the CommonMark spec
-
-# Basic usage:
-#
-# import CommonMark
-# parser = CommonMark.Parser()
-# renderer = CommonMark.HtmlRenderer()
-# print(renderer.render(parser.parse('Hello *world*')))
 from __future__ import absolute_import, unicode_literals
-import json
+
 from builtins import str
-from CommonMark.blocks import Parser
-from CommonMark.html import HtmlRenderer
+import json
+from CommonMark.node import is_container
 
 
-# Utility functions
+def prepare(obj, topnode=False):
+    """Walk the complete AST, only returning needed data.
 
-
-def commonmark(text, format="html"):
-    """Render CommonMark into HTML, JSON or AST
-    Optional keyword arguments:
-    format:     'html' (default), 'json' or 'ast'
-
-    >>> commonmark("*hello!*")
-    '<p><em>hello</em></p>\\n'
+    This removes circular references and allows us to output
+    JSON.
     """
-    parser = Parser()
-    ast = parser.parse(text)
-    if format not in ["html", "json", "ast"]:
-        raise ValueError("format must be 'html', 'json' or 'ast'")
-    if format == "html":
-        renderer = HtmlRenderer()
-        return renderer.render(ast)
-    if format == "json":
-        return ASTtoJSON(ast)
-    if format == "ast":
-        return dumpAST(ast)
+    a = []
+    for subnode, entered in obj.walker():
+        rep = {
+            'type': subnode.t,
+        }
+        if subnode.literal:
+            rep['literal'] = subnode.literal
+
+        if subnode.string_content:
+            rep['string_content'] = subnode.string_content
+
+        if subnode.title:
+            rep['title'] = subnode.title
+
+        if subnode.info:
+            rep['info'] = subnode.info
+
+        if subnode.destination:
+            rep['destination'] = subnode.destination
+
+        if subnode.list_data:
+            rep['list_data'] = subnode.list_data
+
+        if is_container(subnode):
+            rep['children'] = []
+
+        if entered and len(a) > 0:
+            if a[-1]['children']:
+                a[-1]['children'].append(rep)
+            else:
+                a[-1]['children'] = [rep]
+        else:
+            a.append(rep)
+    return a
 
 
-def prepare(block):
-    """ Strips circular 'parent' references and trims empty
-    block elements."""
-    to_remove = [
-        'parent', 'nxt', 'prv', 'first_child', 'last_child',
-    ]
-    for r in to_remove:
-        block.__dict__[r] = None
-    if block.is_open is not None:
-        block.__dict__['open'] = block.is_open
-        del(block.is_open)
-    # trim empty elements...
-    for attr in dir(block):
-        if not callable(attr) and not attr.startswith("__") and \
-           attr not in ['pretty', 'is_container',
-                        'append_child', 'prepend_child', 'unlink',
-                        'insert_after', 'insert_before', 'walker']:
-            if block.__dict__[attr] in ["", [], None, {}]:
-                del(block.__dict__[attr])
-    return block
-
-
-def ASTtoJSON(block):
-    """ Output AST in JSON form, this is destructive of block."""
-    # sort_keys=True) # indent=4)
-    return json.dumps(prepare(block), default=lambda o: o.__dict__)
+def dumpJSON(obj):
+    """Output AST in JSON form, this is destructive of block."""
+    prepared = prepare(obj)
+    return json.dumps(prepared, indent=4, sort_keys=True)
 
 
 def dumpAST(obj, ind=0, topnode=False):
-    """ Print out a block/entire AST."""
+    """Print out a block/entire AST."""
     indChar = ("\t" * ind) + "-> " if ind else ""
     print(indChar + "[" + obj.t + "]")
     if not obj.title == "":
@@ -98,7 +84,9 @@ def dumpAST(obj, ind=0, topnode=False):
                 "\t\t" + indChar + "[bullet_char] = " +
                 obj.list_data['bullet_char'])
         if obj.list_data.get('start'):
-            print("\t\t" + indChar + "[start] = " + obj.list_data.get('start'))
+            print(
+                "\t\t" + indChar + "[start] = " +
+                str(obj.list_data.get('start')))
         if obj.list_data.get('delimiter'):
             print(
                 "\t\t" + indChar + "[delimiter] = " +

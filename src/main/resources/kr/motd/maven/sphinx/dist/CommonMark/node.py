@@ -4,9 +4,9 @@ import re
 
 
 reContainer = re.compile(
-    r'(Document|BlockQuote|List|Item|Paragraph|'
-    r'Heading|Emph|Strong|Link|Image|'
-    r'CustomInline|CustomBlock)')
+    r'(document|block_quote|list|item|paragraph|'
+    r'heading|emph|strong|link|image|'
+    r'custom_inline|custom_block)')
 
 
 def is_container(node):
@@ -79,7 +79,7 @@ class Node(object):
         self.sourcepos = sourcepos
         self.last_line_blank = False
         self.is_open = True
-        self.string_content = None
+        self.string_content = ''
         self.literal = None
         self.list_data = {}
         self.info = None

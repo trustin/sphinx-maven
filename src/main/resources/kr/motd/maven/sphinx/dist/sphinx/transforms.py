@@ -44,6 +44,7 @@ class DefaultSubstitutions(Transform):
     default_priority = 210
 
     def apply(self):
+        env = self.document.settings.env
         config = self.document.settings.env.config
         # only handle those not otherwise defined in the document
         to_handle = default_substitutions - set(self.document.substitution_defs)
@@ -53,8 +54,8 @@ class DefaultSubstitutions(Transform):
                 text = config[refname]
                 if refname == 'today' and not text:
                     # special handling: can also specify a strftime format
-                    text = format_date(config.today_fmt or _('MMMM dd, YYYY'),
-                                       language=config.language)
+                    text = format_date(config.today_fmt or _('%b %d, %Y'),
+                                       language=config.language, warn=env.warn)
                 ref.replace_self(nodes.Text(text, text))
 
 
@@ -113,7 +114,7 @@ class AutoNumbering(Transform):
         domain = self.document.settings.env.domains['std']
 
         for node in self.document.traverse(nodes.Element):
-            if domain.is_enumerable_node(node) and domain.get_numfig_title(node):
+            if domain.is_enumerable_node(node) and domain.get_numfig_title(node) is not None:
                 self.document.note_implicit_target(node)
 
 
@@ -167,6 +168,24 @@ class ApplySourceWorkaround(Transform):
         for n in self.document.traverse():
             if isinstance(n, nodes.TextElement):
                 apply_source_workaround(n)
+
+
+class AutoIndexUpgrader(Transform):
+    """
+    Detect old style; 4 column based indices and automatically upgrade to new style.
+    """
+    default_priority = 210
+
+    def apply(self):
+        env = self.document.settings.env
+        for node in self.document.traverse(addnodes.index):
+            if 'entries' in node and any(len(entry) == 4 for entry in node['entries']):
+                msg = ('4 column based index found. '
+                       'It might be a bug of extensions you use: %r' % node['entries'])
+                env.warn_node(msg, node)
+                for i, entry in enumerate(node['entries']):
+                    if len(entry) == 4:
+                        node['entries'][i] = entry + (None,)
 
 
 class ExtraTranslatableNodes(Transform):
@@ -238,9 +257,7 @@ class Locale(Transform):
         # fetch translations
         dirs = [path.join(env.srcdir, directory)
                 for directory in env.config.locale_dirs]
-        catalog, has_catalog = init_locale(dirs, env.config.language,
-                                           textdomain,
-                                           charset=env.config.source_encoding)
+        catalog, has_catalog = init_locale(dirs, env.config.language, textdomain)
         if not has_catalog:
             return
 

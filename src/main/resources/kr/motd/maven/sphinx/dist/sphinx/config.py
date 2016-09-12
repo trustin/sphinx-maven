@@ -10,7 +10,7 @@
 """
 
 import re
-from os import path, environ
+from os import path, environ, getenv
 import shlex
 
 from six import PY2, PY3, iteritems, string_types, binary_type, text_type, integer_types
@@ -19,8 +19,10 @@ from sphinx.errors import ConfigError
 from sphinx.locale import l_
 from sphinx.util.osutil import make_filename, cd
 from sphinx.util.pycompat import execfile_, NoneType
+from sphinx.util.i18n import format_date
 
 nonascii_re = re.compile(br'[\x80-\xff]')
+copyright_year_re = re.compile(r'^((\d{4}-)?)(\d{4})(?=[ ,])')
 
 CONFIG_SYNTAX_ERROR = "There is a syntax error in your configuration file: %s"
 if PY3:
@@ -58,7 +60,7 @@ class Config(object):
 
         language = (None, 'env', string_classes),
         locale_dirs = ([], 'env'),
-        figure_language_filename = ('{root}.{language}{ext}', 'env', [str]),
+        figure_language_filename = (u'{root}.{language}{ext}', 'env', [str]),
 
         master_doc = ('contents', 'env'),
         source_suffix = (['.rst'], 'env'),
@@ -207,6 +209,7 @@ class Config(object):
                            None),
         latex_logo = (None, None, string_classes),
         latex_appendices = ([], None),
+        latex_keep_old_macro_names = (True, None),
         # now deprecated - use latex_toplevel_sectioning
         latex_use_parts = (False, None),
         latex_toplevel_sectioning = (None, None, [str]),
@@ -273,11 +276,6 @@ class Config(object):
         self.overrides = overrides
         self.values = Config.config_values.copy()
         config = {}
-        if 'extensions' in overrides:  # XXX do we need this?
-            if isinstance(overrides['extensions'], string_types):
-                config['extensions'] = overrides.pop('extensions').split(',')
-            else:
-                config['extensions'] = overrides.pop('extensions')
         if dirname is not None:
             config_file = path.join(dirname, filename)
             config['__file__'] = config_file
@@ -296,7 +294,22 @@ class Config(object):
         # these two must be preinitialized because extensions can add their
         # own config values
         self.setup = config.get('setup', None)
+
+        if 'extensions' in overrides:
+            if isinstance(overrides['extensions'], string_types):
+                config['extensions'] = overrides.pop('extensions').split(',')
+            else:
+                config['extensions'] = overrides.pop('extensions')
         self.extensions = config.get('extensions', [])
+
+        # correct values of copyright year that are not coherent with
+        # the SOURCE_DATE_EPOCH environment variable (if set)
+        # See https://reproducible-builds.org/specs/source-date-epoch/
+        if getenv('SOURCE_DATE_EPOCH') is not None:
+            for k in ('copyright', 'epub_copyright'):
+                if k in config:
+                    config[k] = copyright_year_re.sub('\g<1>%s' % format_date('%Y'),
+                                                      config[k])
 
     def check_types(self, warn):
         # check all values for deviation from the default value's type, since
@@ -338,40 +351,60 @@ class Config(object):
                      'characters; this can lead to Unicode errors occurring. '
                      'Please use Unicode strings, e.g. %r.' % (name, u'Content'))
 
+    def convert_overrides(self, name, value):
+        if not isinstance(value, string_types):
+            return value
+        else:
+            defvalue = self.values[name][0]
+            if isinstance(defvalue, dict):
+                raise ValueError('cannot override dictionary config setting %r, '
+                                 'ignoring (use %r to set individual elements)' %
+                                 (name, name + '.key=value'))
+            elif isinstance(defvalue, list):
+                return value.split(',')
+            elif isinstance(defvalue, integer_types):
+                try:
+                    return int(value)
+                except ValueError:
+                    raise ValueError('invalid number %r for config value %r, ignoring' %
+                                     (value, name))
+            elif hasattr(defvalue, '__call__'):
+                return value
+            elif defvalue is not None and not isinstance(defvalue, string_types):
+                raise ValueError('cannot override config setting %r with unsupported '
+                                 'type, ignoring' % name)
+            else:
+                return value
+
+    def pre_init_values(self, warn):
+        """Initialize some limited config variables before loading extensions"""
+        variables = ['needs_sphinx', 'suppress_warnings']
+        for name in variables:
+            try:
+                if name in self.overrides:
+                    self.__dict__[name] = self.convert_overrides(name, self.overrides[name])
+                elif name in self._raw_config:
+                    self.__dict__[name] = self._raw_config[name]
+            except ValueError as exc:
+                warn(exc)
+
     def init_values(self, warn):
         config = self._raw_config
         for valname, value in iteritems(self.overrides):
-            if '.' in valname:
-                realvalname, key = valname.split('.', 1)
-                config.setdefault(realvalname, {})[key] = value
-                continue
-            elif valname not in self.values:
-                warn('unknown config value %r in override, ignoring' % valname)
-                continue
-            defvalue = self.values[valname][0]
-            if isinstance(value, string_types):
-                if isinstance(defvalue, dict):
-                    warn('cannot override dictionary config setting %r, '
-                         'ignoring (use %r to set individual elements)' %
-                         (valname, valname + '.key=value'))
+            try:
+                if '.' in valname:
+                    realvalname, key = valname.split('.', 1)
+                    config.setdefault(realvalname, {})[key] = value
                     continue
-                elif isinstance(defvalue, list):
-                    config[valname] = value.split(',')
-                elif isinstance(defvalue, integer_types):
-                    try:
-                        config[valname] = int(value)
-                    except ValueError:
-                        warn('invalid number %r for config value %r, ignoring'
-                             % (value, valname))
-                elif hasattr(defvalue, '__call__'):
-                    config[valname] = value
-                elif defvalue is not None and not isinstance(defvalue, string_types):
-                    warn('cannot override config setting %r with unsupported '
-                         'type, ignoring' % valname)
+                elif valname not in self.values:
+                    warn('unknown config value %r in override, ignoring' % valname)
+                    continue
+                if isinstance(value, string_types):
+                    config[valname] = self.convert_overrides(valname, value)
                 else:
                     config[valname] = value
-            else:
-                config[valname] = value
+            except ValueError as exc:
+                warn(exc)
         for name in config:
             if name in self.values:
                 self.__dict__[name] = config[name]

@@ -37,13 +37,14 @@ from sphinx.domains.std import GenericObject, Target, StandardDomain
 from sphinx.builders import BUILTIN_BUILDERS
 from sphinx.environment import BuildEnvironment
 from sphinx.io import SphinxStandaloneReader
-from sphinx.util import pycompat  # noqa: imported for side-effects
+from sphinx.util import pycompat  # noqa: F401
 from sphinx.util import import_object
 from sphinx.util.tags import Tags
 from sphinx.util.osutil import ENOENT
 from sphinx.util.logging import is_suppressed_warning
 from sphinx.util.console import bold, lightgray, darkgray, darkgreen, \
     term_width_line
+from sphinx.util.i18n import find_catalog_source_files
 
 if hasattr(sys, 'intern'):
     intern = sys.intern
@@ -67,6 +68,10 @@ events = {
 
 CONFIG_FILENAME = 'conf.py'
 ENV_PICKLE_FILENAME = 'environment.pickle'
+
+# list of deprecated extensions. Keys are extension name.
+# Values are Sphinx version that merge the extension.
+EXTENSION_BLACKLIST = {"sphinxjp.themecore": "1.2"}
 
 
 class Sphinx(object):
@@ -133,6 +138,15 @@ class Sphinx(object):
         self.config.check_unicode(self.warn)
         # defer checking types until i18n has been initialized
 
+        # initialize some limited config variables before loading extensions
+        self.config.pre_init_values(self.warn)
+
+        # check the Sphinx version if requested
+        if self.config.needs_sphinx and self.config.needs_sphinx > sphinx.__display_version__:
+            raise VersionRequirementError(
+                'This project needs at least Sphinx v%s and therefore cannot '
+                'be built with this version.' % self.config.needs_sphinx)
+
         # set confdir to srcdir if -C given (!= no confdir); a few pieces
         # of code expect a confdir to be set
         if self.confdir is None:
@@ -162,13 +176,6 @@ class Sphinx(object):
 
         # now that we know all config values, collect them from conf.py
         self.config.init_values(self.warn)
-
-        # check the Sphinx version if requested
-        if self.config.needs_sphinx and \
-           self.config.needs_sphinx > sphinx.__display_version__:
-            raise VersionRequirementError(
-                'This project needs at least Sphinx v%s and therefore cannot '
-                'be built with this version.' % self.config.needs_sphinx)
 
         # check extension versions if requested
         if self.config.needs_extensions:
@@ -205,13 +212,17 @@ class Sphinx(object):
         if self.config.language is not None:
             self.info(bold('loading translations [%s]... ' %
                            self.config.language), nonl=True)
-            locale_dirs = [None, path.join(package_dir, 'locale')] + \
-                [path.join(self.srcdir, x) for x in self.config.locale_dirs]
+            user_locale_dirs = [
+                path.join(self.srcdir, x) for x in self.config.locale_dirs]
+            # compile mo files if sphinx.po file in user locale directories are updated
+            for catinfo in find_catalog_source_files(
+                    user_locale_dirs, self.config.language, domains=['sphinx'],
+                    charset=self.config.source_encoding):
+                catinfo.write_mo(self.config.language)
+            locale_dirs = [None, path.join(package_dir, 'locale')] + user_locale_dirs
         else:
             locale_dirs = []
-        self.translator, has_translation = locale.init(locale_dirs,
-                                                       self.config.language,
-                                                       charset=self.config.source_encoding)
+        self.translator, has_translation = locale.init(locale_dirs, self.config.language)
         if self.config.language is not None:
             if has_translation or self.config.language == 'en':
                 # "en" never needs to be translated
@@ -228,8 +239,8 @@ class Sphinx(object):
 
     def _init_env(self, freshenv):
         if freshenv:
-            self.env = BuildEnvironment(self.srcdir, self.doctreedir,
-                                        self.config)
+            self.env = BuildEnvironment(self.srcdir, self.doctreedir, self.config)
+            self.env.set_warnfunc(self.warn)
             self.env.find_files(self.config)
             for domain in self.domains.keys():
                 self.env.domains[domain] = self.domains[domain](self.env)
@@ -238,6 +249,7 @@ class Sphinx(object):
                 self.info(bold('loading pickled environment... '), nonl=True)
                 self.env = BuildEnvironment.frompickle(
                     self.srcdir, self.config, path.join(self.doctreedir, ENV_PICKLE_FILENAME))
+                self.env.set_warnfunc(self.warn)
                 self.env.domains = {}
                 for domain in self.domains.keys():
                     # this can raise if the data version doesn't fit
@@ -249,8 +261,6 @@ class Sphinx(object):
                 else:
                     self.info('failed: %s' % err)
                 return self._init_env(freshenv=True)
-
-        self.env.set_warnfunc(self.warn)
 
     def _init_builder(self, buildername):
         if buildername is None:
@@ -453,6 +463,11 @@ class Sphinx(object):
         self.debug('[app] setting up extension: %r', extension)
         if extension in self._extensions:
             return
+        if extension in EXTENSION_BLACKLIST:
+            self.warn('the extension %r was already merged with Sphinx since version %s; '
+                      'this extension is ignored.' % (
+                          extension, EXTENSION_BLACKLIST[extension]))
+            return
         self._setting_up_extension.append(extension)
         try:
             mod = __import__(extension, None, None, ['setup'])
@@ -584,7 +599,8 @@ class Sphinx(object):
            hasattr(nodes.GenericNodeVisitor, 'visit_' + node.__name__):
             self.warn('while setting up extension %s: node class %r is '
                       'already registered, its visitors will be overridden' %
-                      (self._setting_up_extension, node.__name__))
+                      (self._setting_up_extension, node.__name__),
+                      type='app', subtype='add_node')
         nodes._add_node_class_names([node.__name__])
         for key, val in iteritems(kwds):
             try:
@@ -636,7 +652,8 @@ class Sphinx(object):
         if name in directives._directives:
             self.warn('while setting up extension %s: directive %r is '
                       'already registered, it will be overridden' %
-                      (self._setting_up_extension[-1], name))
+                      (self._setting_up_extension[-1], name),
+                      type='app', subtype='add_directive')
         directives.register_directive(
             name, self._directive_helper(obj, content, arguments, **options))
 
@@ -645,7 +662,8 @@ class Sphinx(object):
         if name in roles._roles:
             self.warn('while setting up extension %s: role %r is '
                       'already registered, it will be overridden' %
-                      (self._setting_up_extension[-1], name))
+                      (self._setting_up_extension[-1], name),
+                      type='app', subtype='add_role')
         roles.register_local_role(name, role)
 
     def add_generic_role(self, name, nodeclass):
@@ -655,7 +673,8 @@ class Sphinx(object):
         if name in roles._roles:
             self.warn('while setting up extension %s: role %r is '
                       'already registered, it will be overridden' %
-                      (self._setting_up_extension[-1], name))
+                      (self._setting_up_extension[-1], name),
+                      type='app', subtype='add_generic_role')
         role = roles.GenericRole(name, nodeclass)
         roles.register_local_role(name, role)
 
@@ -782,6 +801,11 @@ class Sphinx(object):
 
     def add_source_parser(self, suffix, parser):
         self.debug('[app] adding search source_parser: %r, %r', (suffix, parser))
+        if suffix in self._additional_source_parsers:
+            self.warn('while setting up extension %s: source_parser for %r is '
+                      'already registered, it will be overridden' %
+                      (self._setting_up_extension[-1], suffix),
+                      type='app', subtype='add_source_parser')
         self._additional_source_parsers[suffix] = parser
 
 

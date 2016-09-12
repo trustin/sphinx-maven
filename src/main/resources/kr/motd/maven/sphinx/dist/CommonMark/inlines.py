@@ -75,7 +75,7 @@ def normalizeReference(s):
 
 
 def text(s):
-    node = Node('Text', None)
+    node = Node('text', None)
     node.literal = s
     return node
 
@@ -111,6 +111,7 @@ class InlineParser(object):
 
     def __init__(self, options={}):
         self.subject = ''
+        self.brackets = None
         self.pos = 0
         self.refmap = {}
         self.options = options
@@ -155,7 +156,7 @@ class InlineParser(object):
         matched = self.match(reTicks)
         while matched is not None:
             if (matched == ticks):
-                node = Node('Code', None)
+                node = Node('code', None)
                 c = self.subject[after_open_ticks:self.pos - len(ticks)]
                 c = c.strip()
                 c = re.sub(reWhitespace, ' ', c)
@@ -185,7 +186,7 @@ class InlineParser(object):
 
         if self.peek() == '\n':
             self.pos += 1
-            node = Node('Hardbreak', None)
+            node = Node('linebreak', None)
             block.append_child(node)
         elif subjchar and re.match(reEscapable, subjchar):
             block.append_child(text(subjchar))
@@ -202,7 +203,7 @@ class InlineParser(object):
         if m:
             # email
             dest = m[1:-1]
-            node = Node('Link', None)
+            node = Node('link', None)
             node.destination = normalize_uri('mailto:' + dest)
             node.title = ''
             node.append_child(text(dest))
@@ -213,7 +214,7 @@ class InlineParser(object):
             if m:
                 # link
                 dest = m[1:-1]
-                node = Node('Link', None)
+                node = Node('link', None)
                 node.destination = normalize_uri(dest)
                 node.title = ''
                 node.append_child(text(dest))
@@ -228,7 +229,7 @@ class InlineParser(object):
         if m is None:
             return False
         else:
-            node = Node('HtmlInline', None)
+            node = Node('html_inline', None)
             node.literal = m
             block.append_child(node)
             return True
@@ -322,7 +323,6 @@ class InlineParser(object):
             'next': None,
             'can_open': res.get('can_open'),
             'can_close': res.get('can_close'),
-            'active': True,
         }
         if self.delimiters['previous'] is not None:
             self.delimiters['previous']['next'] = self.delimiters
@@ -350,6 +350,7 @@ class InlineParser(object):
             "'": stack_bottom,
             '"': stack_bottom,
         }
+        odd_match = False
         use_delims = 0
 
         # Find first closer above stack_bottom
@@ -359,21 +360,23 @@ class InlineParser(object):
 
         # Move forward, looking for closers, and handling each
         while closer is not None:
-            closercc = closer.get('cc')
-            if not (closer.get('can_close') and
-                    (closercc == '_' or
-                     closercc == '*' or
-                     closercc == "'" or
-                     closercc == '"')):
+            if not closer.get('can_close'):
                 closer = closer.get('next')
             else:
                 # found emphasis closer. now look back for first
                 # matching opener:
                 opener = closer.get('previous')
                 opener_found = False
+                closercc = closer.get('cc')
                 while (opener is not None and opener != stack_bottom and
                        opener != openers_bottom[closercc]):
-                    if opener.get('cc') == closercc and opener.get('can_open'):
+                    odd_match = (closer.get('can_open') or
+                                 opener.get('can_close')) and \
+                                 (opener.get('numdelims') +
+                                  closer.get('numdelims')) % 3 == 0
+                    if opener.get('cc') == closercc and \
+                       opener.get('can_open') and \
+                       not odd_match:
                         opener_found = True
                         break
                     opener = opener.get('previous')
@@ -409,9 +412,9 @@ class InlineParser(object):
 
                         # Build contents for new Emph element
                         if use_delims == 1:
-                            emph = Node('Emph', None)
+                            emph = Node('emph', None)
                         else:
-                            emph = Node('Strong', None)
+                            emph = Node('strong', None)
 
                         tmp = opener_inl.nxt
                         while tmp and tmp != closer_inl:
@@ -449,8 +452,12 @@ class InlineParser(object):
                         opener['node'].literal = '\u201C'
                     closer = closer['next']
 
-                if not opener_found:
+                if not opener_found and not odd_match:
                     # Set lower bound for future searches for openers:
+                    # We don't do this with odd_match because a **
+                    # that doesn't match an earlier * might turn into
+                    # an opener, and the * might be matched by something
+                    # else.
                     openers_bottom[closercc] = old_closer['previous']
                     if not old_closer['can_open']:
                         # We can remove a closer that can't be an opener,
@@ -512,20 +519,7 @@ class InlineParser(object):
         block.append_child(node)
 
         # Add entry to stack for this opener
-        self.delimiters = {
-            'cc': '[',
-            'numdelims': 1,
-            'node': node,
-            'previous': self.delimiters,
-            'next': None,
-            'can_open': True,
-            'can_close': False,
-            'index': startpos,
-            'active': True,
-        }
-        if self.delimiters.get('previous') is not None:
-            self.delimiters['previous']['next'] = self.delimiters
-
+        self.addBracket(node, startpos, False)
         return True
 
     def parseBang(self, block):
@@ -543,19 +537,7 @@ class InlineParser(object):
             block.append_child(node)
 
             # Add entry to stack for this openeer
-            self.delimiters = {
-                'cc': '!',
-                'numdelims': 1,
-                'node': node,
-                'previous': self.delimiters,
-                'next': None,
-                'can_open': True,
-                'can_close': False,
-                'index': startpos + 1,
-                'active': True,
-            }
-            if self.delimiters['previous'] is not None:
-                self.delimiters['previous']['next'] = self.delimiters
+            self.addBracket(node, startpos + 1, True)
         else:
             block.append_child(text('!'))
 
@@ -573,13 +555,8 @@ class InlineParser(object):
         self.pos += 1
         startpos = self.pos
 
-        # look through the stack of delimiters for a [ or ![
-        opener = self.delimiters
-
-        while opener is not None:
-            if opener.get('cc') == '[' or opener.get('cc') == '!':
-                break
-            opener = opener.get('previous')
+        # get last [ or ![
+        opener = self.brackets
 
         if opener is None:
             # no matched opener, just return a literal
@@ -589,12 +566,12 @@ class InlineParser(object):
         if not opener.get('active'):
             # no matched opener, just return a literal
             block.append_child(text(']'))
-            # take opener off emphasis stack
-            self.removeDelimiter(opener)
+            # take opener off brackets stack
+            self.removeBracket()
             return True
 
         # If we got here, opener is a potential opener
-        is_image = opener.get('cc') == '!'
+        is_image = opener.get('image')
 
         # Check to see if we have a link/image
 
@@ -616,24 +593,28 @@ class InlineParser(object):
             savepos = self.pos
             beforelabel = self.pos
             n = self.parseLinkLabel()
-            if n == 0 or n == 2:
-                # empty or missing second label
-                reflabel = self.subject[opener['index']:startpos]
-            else:
+            if n > 2:
                 reflabel = self.subject[beforelabel:beforelabel + n]
+            elif not opener.get('bracket_after'):
+                # Empty or missing second label means to use the first
+                # label as the reference.  The reference must not
+                # contain a bracket. If we know there's a bracket, we
+                # don't even bother checking it.
+                reflabel = self.subject[opener.get('index'):startpos]
             if n == 0:
                 # If shortcut reference link, rewind before spaces we skipped.
                 self.pos = savepos
 
-            # lookup rawlabel in refmap
-            link = self.refmap.get(normalizeReference(reflabel))
-            if link:
-                dest = link['destination']
-                title = link['title']
-                matched = True
+            if reflabel:
+                # lookup rawlabel in refmap
+                link = self.refmap.get(normalizeReference(reflabel))
+                if link:
+                    dest = link['destination']
+                    title = link['title']
+                    matched = True
 
         if matched:
-            node = Node('Image' if is_image else 'Link', None)
+            node = Node('image' if is_image else 'link', None)
 
             node.destination = dest
             node.title = title or ''
@@ -644,17 +625,18 @@ class InlineParser(object):
                 node.append_child(tmp)
                 tmp = nxt
             block.append_child(node)
-            self.processEmphasis(opener.get('previous'))
-
+            self.processEmphasis(opener.get('previousDelimiter'))
+            self.removeBracket()
             opener.get('node').unlink()
 
-            # processEmphasis will remove this and later delimiters.
+            # We remove this bracket and processEmphasis will remove
+            # later delimiters.
             # Now, for a link, we also deactivate earlier link openers.
             # (no links in links)
             if not is_image:
-                opener = self.delimiters
+                opener = self.brackets
                 while opener is not None:
-                    if opener.get('cc') == '[':
+                    if not opener.get('image'):
                         # deactivate this opener
                         opener['active'] = False
                     opener = opener.get('previous')
@@ -663,10 +645,26 @@ class InlineParser(object):
         else:
             # no match
             # remove this opener from stack
-            self.removeDelimiter(opener)
+            self.removeBracket()
             self.pos = startpos
             block.append_child(text(']'))
             return True
+
+    def addBracket(self, node, index, image):
+        if self.brackets is not None:
+            self.brackets['bracketAfter'] = True
+
+        self.brackets = {
+            'node': node,
+            'previous': self.brackets,
+            'previousDelimiter': self.delimiters,
+            'index': index,
+            'image': image,
+            'active': True,
+        }
+
+    def removeBracket(self):
+        self.brackets = self.brackets.get('previous')
 
     def parseEntity(self, block):
         """Attempt to parse an entity."""
@@ -702,16 +700,16 @@ class InlineParser(object):
         # assume we're at a \n
         self.pos += 1
         lastc = block.last_child
-        if lastc and lastc.t == 'Text' and lastc.literal[-1] == ' ':
-            hardbreak = len(lastc.literal) >= 2 and lastc.literal[-2] == ' '
+        if lastc and lastc.t == 'text' and lastc.literal[-1] == ' ':
+            linebreak = len(lastc.literal) >= 2 and lastc.literal[-2] == ' '
             lastc.literal = re.sub(reFinalSpace, '', lastc.literal)
-            if hardbreak:
-                node = Node('Hardbreak', None)
+            if linebreak:
+                node = Node('linebreak', None)
             else:
-                node = Node('Softbreak', None)
+                node = Node('softbreak', None)
             block.append_child(node)
         else:
-            block.append_child(Node('Softbreak', None))
+            block.append_child(Node('softbreak', None))
 
         # gobble leading spaces in next line
         self.match(reInitialSpace)
@@ -834,6 +832,7 @@ class InlineParser(object):
         self.subject = block.string_content.strip()
         self.pos = 0
         self.delimiters = None
+        self.brackets = None
         while (self.parseInline(block)):
             pass
         # allow raw string to be garbage collected

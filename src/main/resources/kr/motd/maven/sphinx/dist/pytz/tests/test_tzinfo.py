@@ -21,8 +21,8 @@ from pytz.tzinfo import DstTzInfo, StaticTzInfo
 
 # I test for expected version to ensure the correct version of pytz is
 # actually being tested.
-EXPECTED_VERSION='2016.3'
-EXPECTED_OLSON_VERSION='2016c'
+EXPECTED_VERSION='2016.6.1'
+EXPECTED_OLSON_VERSION='2016f'
 
 fmt = '%Y-%m-%d %H:%M:%S %Z%z'
 
@@ -113,6 +113,12 @@ class BasicTest(unittest.TestCase):
         self.clearCache()
         eastern = pytz.timezone('US/Eastern')
         self.assertTrue(eastern is pytz.timezone(unicode('US/Eastern')))
+
+    def testStaticTzInfo(self):
+        # Ensure that static timezones are correctly detected,
+        # per lp:1602807
+        static = pytz.timezone('Etc/GMT-4')
+        self.assertTrue(isinstance(static, StaticTzInfo))
 
 
 class PicklingTest(unittest.TestCase):

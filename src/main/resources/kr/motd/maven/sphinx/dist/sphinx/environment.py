@@ -17,6 +17,7 @@ import types
 import bisect
 import codecs
 import string
+import fnmatch
 import unicodedata
 from os import path
 from glob import glob
@@ -75,7 +76,7 @@ default_settings = {
 # or changed to properly invalidate pickle files.
 #
 # NOTE: increase base version by 2 to have distinct numbers for Py2 and 3
-ENV_VERSION = 47 + (sys.version_info[0] - 2)
+ENV_VERSION = 49 + (sys.version_info[0] - 2)
 
 
 dummy_reporter = Reporter('', 4, 4)
@@ -175,6 +176,7 @@ class BuildEnvironment:
                                     # contains all read docnames
         self.dependencies = {}      # docname -> set of dependent file
                                     # names, relative to documentation root
+        self.included = set()       # docnames included from other documents
         self.reread_always = set()  # docnames to re-read unconditionally on
                                     # next build
 
@@ -334,6 +336,20 @@ class BuildEnvironment:
             domain.merge_domaindata(docnames, other.domaindata[domainname])
         app.emit('env-merge-info', self, docnames, other)
 
+    def path2doc(self, filename):
+        """Return the docname for the filename if the file is document.
+
+        *filename* should be absolute or relative to the source directory.
+        """
+        if filename.startswith(self.srcdir):
+            filename = filename[len(self.srcdir) + 1:]
+        for suffix in self.config.source_suffix:
+            if fnmatch.fnmatch(filename, '*' + suffix):
+                return filename[:-len(suffix)]
+        else:
+            # the file does not have docname
+            return None
+
     def doc2path(self, docname, base=True, suffix=None):
         """Return the filename for the document name.
 
@@ -393,8 +409,13 @@ class BuildEnvironment:
             config.html_extra_path +
             ['**/_sources', '.#*', '**/.#*', '*.lproj/**']
         )
-        self.found_docs = set(get_matching_docs(
-            self.srcdir, config.source_suffix, exclude_matchers=matchers))
+        self.found_docs = set()
+        for docname in get_matching_docs(self.srcdir, config.source_suffix,
+                                         exclude_matchers=matchers):
+            if os.access(self.doc2path(docname), os.R_OK):
+                self.found_docs.add(docname)
+            else:
+                self.warn(docname, "document not readable. Ignored.")
 
         # add catalog mo file dependency
         for docname in self.found_docs:
@@ -832,6 +853,15 @@ class BuildEnvironment:
         """
         self.dependencies.setdefault(self.docname, set()).add(filename)
 
+    def note_included(self, filename):
+        """Add *filename* as a included from other document.
+
+        This means the document is not orphaned.
+
+        *filename* should be absolute or relative to the source directory.
+        """
+        self.included.add(self.path2doc(filename))
+
     def note_reread(self):
         """Add the current document to the list of documents that will
         automatically be re-read at the next build.
@@ -907,8 +937,14 @@ class BuildEnvironment:
             # The special key ? is set for nonlocal URIs.
             node['candidates'] = candidates = {}
             imguri = node['uri']
-            if imguri.find('://') != -1:
-                self.warn_node('nonlocal image URI found: %s' % imguri, node)
+            if imguri.startswith('data:'):
+                self.warn_node('image data URI found. some builders might not support', node,
+                               type='image', subtype='data_uri')
+                candidates['?'] = imguri
+                continue
+            elif imguri.find('://') != -1:
+                self.warn_node('nonlocal image URI found: %s' % imguri, node,
+                               type='image', subtype='nonlocal_uri')
                 candidates['?'] = imguri
                 continue
             rel_imgpath, full_imgpath = self.relfn2path(imguri, docname)
@@ -1422,7 +1458,10 @@ class BuildEnvironment:
                             # nodes with length 1 don't have any children anyway
                             if len(toplevel) > 1:
                                 subtrees = toplevel.traverse(addnodes.toctree)
-                                toplevel[1][:] = subtrees
+                                if subtrees:
+                                    toplevel[1][:] = subtrees
+                                else:
+                                    toplevel.pop(1)
                     # resolve all sub-toctrees
                     for subtocnode in toc.traverse(addnodes.toctree):
                         if not (subtocnode.get('hidden', False) and
@@ -1467,6 +1506,9 @@ class BuildEnvironment:
         # prune the tree to maxdepth, also set toc depth and current classes
         _toctree_add_classes(newnode, 1)
         self._toctree_prune(newnode, 1, prune and maxdepth or 0, collapse)
+
+        if len(newnode[-1]) == 0:  # No titles found
+            return None
 
         # set the target paths in the toctrees (they are not known at TOC
         # generation time)
@@ -1905,6 +1947,10 @@ class BuildEnvironment:
         traversed = set()
 
         def traverse_toctree(parent, docname):
+            if parent == docname:
+                self.warn(docname, 'self referenced toctree found. Ignored.')
+                return
+
             # traverse toctree by pre-order
             yield parent, docname
             traversed.add(docname)
@@ -1935,6 +1981,9 @@ class BuildEnvironment:
             if docname not in self.files_to_rebuild:
                 if docname == self.config.master_doc:
                     # the master file is not included anywhere ;)
+                    continue
+                if docname in self.included:
+                    # the document is included from other documents
                     continue
                 if 'orphan' in self.metadata[docname]:
                     continue

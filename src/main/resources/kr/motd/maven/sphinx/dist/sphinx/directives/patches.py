@@ -19,13 +19,18 @@ class Figure(images.Figure):
 
     def run(self):
         name = self.options.pop('name', None)
-        (figure_node,) = images.Figure.run(self)
-        if isinstance(figure_node, nodes.system_message):
-            return [figure_node]
+        result = images.Figure.run(self)
+        if len(result) == 2 or isinstance(result[0], nodes.system_message):
+            return result
 
+        (figure_node,) = result
         if name:
             self.options['name'] = name
             self.add_name(figure_node)
+
+        # fill lineno using image node
+        if figure_node.line is None and len(figure_node) == 2:
+            figure_node.line = figure_node[1].line
 
         return [figure_node]
 

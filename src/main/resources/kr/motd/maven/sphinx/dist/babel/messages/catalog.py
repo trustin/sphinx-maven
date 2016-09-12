@@ -378,8 +378,8 @@ class Catalog(object):
             headers.append(('Language', str(self.locale)))
         if (self.locale is not None) and ('LANGUAGE' in self.language_team):
             headers.append(('Language-Team',
-                           self.language_team.replace('LANGUAGE',
-                                                      str(self.locale))))
+                            self.language_team.replace('LANGUAGE',
+                                                       str(self.locale))))
         else:
             headers.append(('Language-Team', self.language_team))
         if self.locale is not None:
@@ -673,7 +673,7 @@ class Catalog(object):
         if key in self._messages:
             del self._messages[key]
 
-    def update(self, template, no_fuzzy_matching=False):
+    def update(self, template, no_fuzzy_matching=False, update_header_comment=False):
         """Update the catalog based on the given template catalog.
 
         >>> from babel.messages import Catalog
@@ -779,7 +779,7 @@ class Catalog(object):
                     if no_fuzzy_matching is False:
                         # do some fuzzy matching with difflib
                         if isinstance(key, tuple):
-                            matchkey = key[0] # just the msgid, no context
+                            matchkey = key[0]  # just the msgid, no context
                         else:
                             matchkey = key
                         matches = get_close_matches(matchkey.lower().strip(),
@@ -798,9 +798,10 @@ class Catalog(object):
             if no_fuzzy_matching or msgid not in fuzzy_matches:
                 self.obsolete[msgid] = remaining[msgid]
 
-        # Allow the updated catalog's header to be rewritten based on the
-        # template's header
-        self.header_comment = template.header_comment
+        if update_header_comment:
+            # Allow the updated catalog's header to be rewritten based on the
+            # template's header
+            self.header_comment = template.header_comment
 
         # Make updated catalog's POT-Creation-Date equal to the template
         # used to update the catalog

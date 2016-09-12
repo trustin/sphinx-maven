@@ -33,8 +33,9 @@ import posixpath
 from os import path
 import re
 
-from six import iteritems
-from six.moves.urllib import parse, request
+from six import iteritems, string_types
+from six.moves.urllib import request
+from six.moves.urllib.parse import urlsplit, urlunsplit
 from docutils import nodes
 from docutils.utils import relative_path
 
@@ -105,7 +106,7 @@ def read_inventory_v2(f, uri, join, bufsize=16*1024):
 
     for line in split_lines(read_chunks()):
         # be careful to handle names with embedded spaces correctly
-        m = re.match(r'(?x)(.+?)\s+(\S*:\S*)\s+(\S+)\s+(\S+)\s+(.*)',
+        m = re.match(r'(?x)(.+?)\s+(\S*:\S*)\s+(-?\d+)\s+(\S+)\s+(.*)',
                      line.rstrip())
         if not m:
             continue
@@ -145,13 +146,16 @@ def _strip_basic_auth(url):
 
     :rtype: ``tuple``
     """
-    url_parts = parse.urlsplit(url)
+    url_parts = urlsplit(url)
     username = url_parts.username
     password = url_parts.password
     frags = list(url_parts)
     # swap out "user[:pass]@hostname" for "hostname"
-    frags[1] = url_parts.hostname
-    url = parse.urlunsplit(frags)
+    if url_parts.port:
+        frags[1] = "%s:%s" % (url_parts.hostname, url_parts.port)
+    else:
+        frags[1] = url_parts.hostname
+    url = urlunsplit(frags)
     return (url, username, password)
 
 
@@ -177,7 +181,7 @@ def _read_from_url(url):
         password_mgr = request.HTTPPasswordMgrWithDefaultRealm()
         password_mgr.add_password(None, url, username, password)
         handler = request.HTTPBasicAuthHandler(password_mgr)
-        opener = request.build_opener(default_handlers + [handler])
+        opener = request.build_opener(*(default_handlers + [handler]))
     else:
         opener = default_opener
 
@@ -205,12 +209,12 @@ def _get_safe_url(url):
     url, username, _ = _strip_basic_auth(url)
     if username is not None:
         # case: url contained basic auth creds; obscure password
-        url_parts = parse.urlsplit(url)
+        url_parts = urlsplit(url)
         safe_netloc = '{0}@{1}'.format(username, url_parts.hostname)
         # replace original netloc w/ obscured version
         frags = list(url_parts)
         frags[1] = safe_netloc
-        safe_url = parse.urlunsplit(frags)
+        safe_url = urlunsplit(frags)
 
     return safe_url
 
@@ -234,6 +238,13 @@ def fetch_inventory(app, uri, inv):
                  '%s: %s' % (inv, err.__class__, err))
         return
     try:
+        if hasattr(f, 'geturl'):
+            newinv = f.geturl()
+            if inv != newinv:
+                app.info('intersphinx inventory has moved: %s -> %s' % (inv, newinv))
+
+                if uri in (inv, path.dirname(inv), path.dirname(inv) + '/'):
+                    uri = path.dirname(newinv)
         line = f.readline().rstrip().decode('utf-8')
         try:
             if line == '# Sphinx inventory version 1':
@@ -268,8 +279,9 @@ def load_mappings(app):
         if isinstance(value, tuple):
             # new format
             name, (uri, inv) = key, value
-            if not name.isalnum():
-                app.warn('intersphinx identifier %r is not alphanumeric' % name)
+            if not isinstance(name, string_types):
+                app.warn('intersphinx identifier %r is not string. Ignored' % name)
+                continue
         else:
             # old format, no name
             name, uri, inv = None, key, value

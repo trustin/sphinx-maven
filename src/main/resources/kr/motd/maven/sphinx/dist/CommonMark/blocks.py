@@ -6,6 +6,7 @@ from CommonMark import common
 from CommonMark.common import unescape_string
 from CommonMark.inlines import InlineParser
 from CommonMark.node import Node
+from CommonMark.utils import to_camel_case
 
 
 CODE_INDENT = 4
@@ -26,7 +27,7 @@ reHtmlBlockOpen = [
         r'(?:\s|[/]?[>]|$)',
         re.IGNORECASE),
     re.compile(
-        '^(?:' + common.OPENTAG + '|' + common.CLOSETAG + ')\s*$',
+        '^(?:' + common.OPENTAG + '|' + common.CLOSETAG + ')\\s*$',
         re.IGNORECASE),
 ]
 reHtmlBlockClose = [
@@ -37,12 +38,13 @@ reHtmlBlockClose = [
     re.compile(r'>'),
     re.compile(r'\]\]>'),
 ]
-reThematicBreak = re.compile(r'^(?:(?:\* *){3,}|(?:_ *){3,}|(?:- *){3,}) *$')
+reThematicBreak = re.compile(
+    r'^(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})[ \t]*$')
 reMaybeSpecial = re.compile(r'^[#`~*+_=<>0-9-]')
 reNonSpace = re.compile(r'[^ \t\f\v\r\n]')
 reBulletListMarker = re.compile(r'^[*+-]')
 reOrderedListMarker = re.compile(r'^(\d{1,9})([.)])')
-reATXHeadingMarker = re.compile(r'^#{1,6}(?: +|$)')
+reATXHeadingMarker = re.compile(r'^#{1,6}(?:[ \t]+|$)')
 reCodeFence = re.compile(r'^`{3,}(?!.*`)|^~{3,}(?!.*~)')
 reClosingCodeFence = re.compile(r'^(?:`{3,}|~{3,})(?= *$)')
 reSetextHeadingLine = re.compile(r'^(?:=+|-+) *$')
@@ -52,6 +54,10 @@ reLineEnding = re.compile(r'\r\n|\n|\r')
 def is_blank(s):
     """Returns True if string contains only space characters."""
     return re.search(reNonSpace, s) is None
+
+
+def is_space_or_tab(s):
+    return s == ' ' or s == '\t'
 
 
 def peek(ln, pos):
@@ -67,7 +73,7 @@ def ends_with_blank_line(block):
     while block:
         if block.last_line_blank:
             return True
-        if (block.t == "List" or block.t == "Item"):
+        if (block.t == 'list' or block.t == 'item'):
             block = block.last_child
         else:
             break
@@ -75,7 +81,7 @@ def ends_with_blank_line(block):
     return False
 
 
-def parse_list_marker(parser):
+def parse_list_marker(parser, container):
     """ Parse a list marker and return data on the marker (type,
     start, delimiter, bullet character, padding) or None."""
     rest = parser.current_line[parser.next_nonspace:]
@@ -91,11 +97,11 @@ def parse_list_marker(parser):
     m = re.match(reBulletListMarker, rest)
     m2 = re.match(reOrderedListMarker, rest)
     if m:
-        data['type'] = 'Bullet'
+        data['type'] = 'bullet'
         data['bullet_char'] = m.group()[0]
-    elif m2:
+    elif m2 and (container.t != 'paragraph' or m2.group(1) == '1'):
         m = m2
-        data['type'] = 'Ordered'
+        data['type'] = 'ordered'
         data['start'] = int(m.group(1))
         data['delimiter'] = m.group(2)
     else:
@@ -104,6 +110,13 @@ def parse_list_marker(parser):
     # make sure we have spaces after
     nextc = peek(parser.current_line, parser.next_nonspace + len(m.group()))
     if not (nextc is None or nextc == '\t' or nextc == ' '):
+        return None
+
+    # if it interrupts paragraph, make sure first line isn't blank
+    if container.t == 'paragraph' and \
+       not re.search(
+           reNonSpace,
+           parser.current_line[parser.next_nonspace + len(m.group()):]):
         return None
 
     # we've got a match! advance offset and calculate padding
@@ -115,7 +128,7 @@ def parse_list_marker(parser):
         parser.advance_offset(1, True)
         nextc = peek(parser.current_line, parser.offset)
         if parser.column - spaces_start_col < 5 and \
-           (nextc == ' ' or nextc == '\t'):
+           is_space_or_tab(nextc):
             pass
         else:
             break
@@ -127,7 +140,7 @@ def parse_list_marker(parser):
         data['padding'] = len(m.group()) + 1
         parser.column = spaces_start_col
         parser.offset = spaces_start_offset
-        if peek(parser.current_line, parser.offset) == ' ':
+        if is_space_or_tab(peek(parser.current_line, parser.offset)):
             parser.advance_offset(1, True)
     else:
         data['padding'] = len(m.group()) + spaces_after_marker
@@ -175,7 +188,7 @@ class Document(Block):
 
     @staticmethod
     def can_contain(t):
-        return t != 'Item'
+        return t != 'item'
 
 
 class List(Block):
@@ -206,7 +219,7 @@ class List(Block):
 
     @staticmethod
     def can_contain(t):
-        return t == 'Item'
+        return t == 'item'
 
 
 class BlockQuote(Block):
@@ -218,8 +231,8 @@ class BlockQuote(Block):
         if not parser.indented and peek(ln, parser.next_nonspace) == '>':
             parser.advance_next_nonspace()
             parser.advance_offset(1, False)
-            if peek(ln, parser.offset) == ' ':
-                parser.offset += 1
+            if is_space_or_tab(peek(ln, parser.offset)):
+                parser.advance_offset(1, True)
         else:
             return 1
         return 0
@@ -230,7 +243,7 @@ class BlockQuote(Block):
 
     @staticmethod
     def can_contain(t):
-        return t != 'Item'
+        return t != 'item'
 
 
 class Item(Block):
@@ -238,8 +251,12 @@ class Item(Block):
 
     @staticmethod
     def continue_(parser=None, container=None):
-        if parser.blank and container.last_child is not None:
-            parser.advance_next_nonspace()
+        if parser.blank:
+            if container.first_child is None:
+                # Blank line after empty list item
+                return 1
+            else:
+                parser.advance_next_nonspace()
         elif parser.indent >= (container.list_data['marker_offset'] +
                                container.list_data['padding']):
             parser.advance_offset(
@@ -255,7 +272,7 @@ class Item(Block):
 
     @staticmethod
     def can_contain(t):
-        return t != 'Item'
+        return t != 'item'
 
 
 class Heading(Block):
@@ -311,8 +328,8 @@ class CodeBlock(Block):
             else:
                 # skip optional spaces of fence offset
                 i = container.fence_offset
-                while i > 0 and peek(ln, parser.offset) == ' ':
-                    parser.advance_offset(1, False)
+                while i > 0 and is_space_or_tab(peek(ln, parser.offset)):
+                    parser.advance_offset(1, True)
                     i -= 1
         else:
             # indented
@@ -358,10 +375,6 @@ class HtmlBlock(Block):
 
     @staticmethod
     def finalize(parser=None, block=None):
-        if block.string_content == '<div>\n' and \
-           block.sourcepos == [[1, 3], [1, 7]]:
-            # FIXME :P
-            block.string_content = '\n<div>'
         block.literal = re.sub(r'(\n *)+$', '', block.string_content)
         # allow GC
         block.string_content = None
@@ -424,10 +437,10 @@ class BlockStarts(object):
             parser.advance_next_nonspace()
             parser.advance_offset(1, False)
             # optional following space
-            if peek(parser.current_line, parser.offset) == ' ':
-                parser.advance_offset(1, False)
+            if is_space_or_tab(peek(parser.current_line, parser.offset)):
+                parser.advance_offset(1, True)
             parser.close_unmatched_blocks()
-            parser.add_child('BlockQuote', parser.next_nonspace)
+            parser.add_child('block_quote', parser.next_nonspace)
             return 1
 
         return 0
@@ -441,7 +454,7 @@ class BlockStarts(object):
                 parser.advance_next_nonspace()
                 parser.advance_offset(len(m.group()), False)
                 parser.close_unmatched_blocks()
-                container = parser.add_child('Heading', parser.next_nonspace)
+                container = parser.add_child('heading', parser.next_nonspace)
                 # number of #s
                 container.level = len(m.group().strip())
                 # remove trailing ###s:
@@ -463,7 +476,8 @@ class BlockStarts(object):
             if m:
                 fence_length = len(m.group())
                 parser.close_unmatched_blocks()
-                container = parser.add_child('CodeBlock', parser.next_nonspace)
+                container = parser.add_child(
+                    'code_block', parser.next_nonspace)
                 container.is_fenced = True
                 container.fence_length = fence_length
                 container.fence_char = m.group()[0]
@@ -482,24 +496,24 @@ class BlockStarts(object):
 
             for block_type in range(1, 8):
                 if re.search(reHtmlBlockOpen[block_type], s) and \
-                   (block_type < 7 or container.t != 'Paragraph'):
+                   (block_type < 7 or container.t != 'paragraph'):
                     parser.close_unmatched_blocks()
                     # We don't adjust parser.offset;
                     # spaces are part of the HTML block:
-                    b = parser.add_child('HtmlBlock', parser.offset)
+                    b = parser.add_child('html_block', parser.offset)
                     b.html_block_type = block_type
                     return 2
         return 0
 
     @staticmethod
     def setext_heading(parser, container=None):
-        if not parser.indented and container.t == 'Paragraph':
+        if not parser.indented and container.t == 'paragraph':
             m = re.match(
                 reSetextHeadingLine,
                 parser.current_line[parser.next_nonspace:])
             if m:
                 parser.close_unmatched_blocks()
-                heading = Node('Heading', container.sourcepos)
+                heading = Node('heading', container.sourcepos)
                 heading.level = 1 if m.group()[0] == '=' else 2
                 heading.string_content = container.string_content
                 container.insert_after(heading)
@@ -516,7 +530,7 @@ class BlockStarts(object):
         if not parser.indented and re.search(
                 reThematicBreak, parser.current_line[parser.next_nonspace:]):
             parser.close_unmatched_blocks()
-            parser.add_child('ThematicBreak', parser.next_nonspace)
+            parser.add_child('thematic_break', parser.next_nonspace)
             parser.advance_offset(
                 len(parser.current_line) - parser.offset, False)
             return 2
@@ -524,19 +538,19 @@ class BlockStarts(object):
 
     @staticmethod
     def list_item(parser, container=None):
-        if (not parser.indented or container.t == 'List'):
-            data = parse_list_marker(parser)
+        if (not parser.indented or container.t == 'list'):
+            data = parse_list_marker(parser, container)
             if data:
                 parser.close_unmatched_blocks()
 
                 # add the list if needed
-                if parser.tip.t != 'List' or \
+                if parser.tip.t != 'list' or \
                    not lists_match(container.list_data, data):
-                    container = parser.add_child('List', parser.next_nonspace)
+                    container = parser.add_child('list', parser.next_nonspace)
                     container.list_data = data
 
                 # add the list item
-                container = parser.add_child('Item', parser.next_nonspace)
+                container = parser.add_child('item', parser.next_nonspace)
                 container.list_data = data
                 return 1
 
@@ -545,12 +559,12 @@ class BlockStarts(object):
     @staticmethod
     def indented_code_block(parser, container=None):
         if parser.indented and \
-           parser.tip.t != 'Paragraph' and \
+           parser.tip.t != 'paragraph' and \
                            not parser.blank:
             # indented code
             parser.advance_offset(CODE_INDENT, True)
             parser.close_unmatched_blocks()
-            parser.add_child('CodeBlock', parser.offset)
+            parser.add_child('code_block', parser.offset)
             return 2
 
         return 0
@@ -558,7 +572,7 @@ class BlockStarts(object):
 
 class Parser(object):
     def __init__(self, options={}):
-        self.doc = Node('Document', [[1, 1], [0, 0]])
+        self.doc = Node('document', [[1, 1], [0, 0]])
         self.block_starts = BlockStarts()
         self.tip = self.doc
         self.oldtip = self.doc
@@ -571,6 +585,7 @@ class Parser(object):
         self.indent = 0
         self.indented = False
         self.blank = False
+        self.partially_consumed_tab = False
         self.all_closed = True
         self.last_matched_container = self.doc
         self.refmap = {}
@@ -578,43 +593,28 @@ class Parser(object):
         self.inline_parser = InlineParser(options)
         self.options = options
 
-    def break_out_of_lists(self, block):
-        """
-        Break out of all containing lists, resetting the tip of the
-        document to the parent of the highest list, and finalizing
-        all the lists.  (This is used to implement the "two blank lines
-        break out of all lists" feature.)
-        """
-        b = block
-        last_list = None
-        while True:
-            if (b.t == "List"):
-                last_list = b
-            b = b.parent
-            if not b:
-                break
-
-        if (last_list):
-            while block != last_list:
-                self.finalize(block, self.line_number)
-                block = block.parent
-            self.finalize(last_list, self.line_number)
-            self.tip = last_list.parent
-
     def add_line(self):
         """ Add a line to the block at the tip.  We assume the tip
         can accept lines -- that check should be done before calling this."""
+        if self.partially_consumed_tab:
+            # Skip over tab
+            self.offset += 1
+            # Add space characters
+            chars_to_tab = 4 - (self.column % 4)
+            self.tip.string_content += (' ' * chars_to_tab)
         self.tip.string_content += (self.current_line[self.offset:] + '\n')
 
     def add_child(self, tag, offset):
         """ Add block of type tag as a child of the tip.  If the tip can't
         accept children, close and finalize it and try its parent,
         and so on til we find a block that can accept children."""
-        block_class = getattr(import_module('CommonMark.blocks'), self.tip.t)
+        block_class = getattr(import_module('CommonMark.blocks'),
+                              to_camel_case(self.tip.t))
         while not block_class.can_contain(tag):
             self.finalize(self.tip, self.line_number - 1)
             block_class = getattr(
-                import_module('CommonMark.blocks'), self.tip.t)
+                import_module('CommonMark.blocks'),
+                to_camel_case(self.tip.t))
 
         column_number = offset + 1
         new_block = Node(tag, [[self.line_number, column_number], [0, 0]])
@@ -665,9 +665,9 @@ class Parser(object):
     def advance_next_nonspace(self):
         self.offset = self.next_nonspace
         self.column = self.next_nonspace_column
+        self.partially_consumed_tab = False
 
     def advance_offset(self, count, columns):
-        cols = 0
         current_line = self.current_line
         try:
             c = current_line[self.offset]
@@ -676,11 +676,19 @@ class Parser(object):
         while count > 0 and c is not None:
             if c == '\t':
                 chars_to_tab = 4 - (self.column % 4)
-                self.column += chars_to_tab
-                self.offset += 1
-                count -= chars_to_tab if columns else 1
+                if columns:
+                    self.partially_consumed_tab = chars_to_tab > count
+                    chars_to_advance = min(count, chars_to_tab)
+                    self.column += chars_to_advance
+                    self.offset += 0 if self.partially_consumed_tab else 1
+                    count -= chars_to_advance
+                else:
+                    self.partially_consumed_tab = False
+                    self.column += chars_to_tab
+                    self.offset += 1
+                    count -= 1
             else:
-                cols += 1
+                self.partially_consumed_tab = False
                 self.offset += 1
                 # assume ascii; block starts are ascii
                 self.column += 1
@@ -702,6 +710,8 @@ class Parser(object):
         self.oldtip = self.tip
         self.offset = 0
         self.column = 0
+        self.blank = False
+        self.partially_consumed_tab = False
         self.line_number += 1
 
         # replace NUL characters for security
@@ -719,7 +729,8 @@ class Parser(object):
 
             self.find_next_nonspace()
             block_class = getattr(
-                import_module('CommonMark.blocks'), container.t)
+                import_module('CommonMark.blocks'),
+                to_camel_case(container.t))
             rv = block_class.continue_(self, container)
             if rv == 0:
                 # we've matched, keep going
@@ -744,13 +755,9 @@ class Parser(object):
         self.all_closed = (container == self.oldtip)
         self.last_matched_container = container
 
-        # Check to see if we've hit 2nd blank line; if so break out of list:
-        if self.blank and container.last_line_blank:
-            self.break_out_of_lists(container)
-            container = self.tip
-
-        block_class = getattr(import_module('CommonMark.blocks'), container.t)
-        matched_leaf = container.t != 'Paragraph' and block_class.accepts_lines
+        block_class = getattr(import_module('CommonMark.blocks'),
+                              to_camel_case(container.t))
+        matched_leaf = container.t != 'paragraph' and block_class.accepts_lines
         starts = self.block_starts
         starts_len = len(starts.METHODS)
         # Unless last matched container is a code block, try new container
@@ -785,7 +792,7 @@ class Parser(object):
         # What remains at the offset is a text line. Add the text to the
         # appropriate container.
         if not self.all_closed and not self.blank and \
-           self.tip.t == 'Paragraph':
+           self.tip.t == 'paragraph':
             # lazy paragraph continuation
             self.add_line()
         else:
@@ -803,9 +810,9 @@ class Parser(object):
             # don't set last_line_blank on an empty list item, or if we
             # just closed a fenced block.
             last_line_blank = self.blank and \
-                not (t == 'BlockQuote' or
-                     (t == 'CodeBlock' and container.is_fenced) or
-                     (t == 'Item' and
+                not (t == 'block_quote' or
+                     (t == 'code_block' and container.is_fenced) or
+                     (t == 'item' and
                       not container.first_child and
                       container.sourcepos[0][0] == self.line_number))
 
@@ -815,11 +822,12 @@ class Parser(object):
                 cont.last_line_blank = last_line_blank
                 cont = cont.parent
 
-            block_class = getattr(import_module('CommonMark.blocks'), t)
+            block_class = getattr(import_module('CommonMark.blocks'),
+                                  to_camel_case(t))
             if block_class.accepts_lines:
                 self.add_line()
                 # if HtmlBlock, check for end condition
-                if t == 'HtmlBlock' and \
+                if t == 'html_block' and \
                    container.html_block_type >= 1 and \
                    container.html_block_type <= 5 and \
                    re.search(
@@ -828,7 +836,7 @@ class Parser(object):
                     self.finalize(container, self.line_number)
             elif self.offset < len(ln) and not self.blank:
                 # create a paragraph container for one line
-                container = self.add_child('Paragraph', self.offset)
+                container = self.add_child('paragraph', self.offset)
                 self.advance_next_nonspace()
                 self.add_line()
 
@@ -843,7 +851,8 @@ class Parser(object):
         above = block.parent
         block.is_open = False
         block.sourcepos[1] = [line_number, self.last_line_length]
-        block_class = getattr(import_module('CommonMark.blocks'), block.t)
+        block_class = getattr(import_module('CommonMark.blocks'),
+                              to_camel_case(block.t))
         block_class.finalize(self, block)
 
         self.tip = above
@@ -860,13 +869,13 @@ class Parser(object):
         while event is not None:
             node = event['node']
             t = node.t
-            if not event['entering'] and (t == 'Paragraph' or t == 'Heading'):
+            if not event['entering'] and (t == 'paragraph' or t == 'heading'):
                 self.inline_parser.parse(node)
             event = walker.nxt()
 
     def parse(self, my_input):
         """ The main parsing function.  Returns a parsed document AST."""
-        self.doc = Node('Document', [[1, 1], [0, 0]])
+        self.doc = Node('document', [[1, 1], [0, 0]])
         self.tip = self.doc
         self.refmap = {}
         self.line_number = 0

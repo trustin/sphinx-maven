@@ -163,8 +163,13 @@ def read_po(fileobj, locale=None, domain=None, ignore_obsolete=False, charset=No
                 catalog.obsolete[msgid] = message
         else:
             catalog[msgid] = message
-        del messages[:]; del translations[:]; del context[:]; del locations[:];
-        del flags[:]; del auto_comments[:]; del user_comments[:];
+        del messages[:]
+        del translations[:]
+        del context[:]
+        del locations[:]
+        del flags[:]
+        del auto_comments[:]
+        del user_comments[:]
         obsolete[0] = False
         counter[0] += 1
 
@@ -230,7 +235,7 @@ def read_po(fileobj, locale=None, domain=None, ignore_obsolete=False, charset=No
             elif line[1:].startswith('.'):
                 # These are called auto-comments
                 comment = line[2:].strip()
-                if comment: # Just check that we're not adding empty comments
+                if comment:  # Just check that we're not adding empty comments
                     auto_comments.append(comment)
             else:
                 # These are called user comments
@@ -252,10 +257,10 @@ def read_po(fileobj, locale=None, domain=None, ignore_obsolete=False, charset=No
 
 
 WORD_SEP = re.compile('('
-    r'\s+|'                                 # any whitespace
-    r'[^\s\w]*\w+[a-zA-Z]-(?=\w+[a-zA-Z])|' # hyphenated words
-    r'(?<=[\w\!\"\'\&\.\,\?])-{2,}(?=\w)'   # em-dash
-')')
+                      r'\s+|'                                 # any whitespace
+                      r'[^\s\w]*\w+[a-zA-Z]-(?=\w+[a-zA-Z])|'  # hyphenated words
+                      r'(?<=[\w\!\"\'\&\.\,\?])-{2,}(?=\w)'   # em-dash
+                      ')')
 
 
 def escape(string):
@@ -334,7 +339,7 @@ def normalize(string, prefix='', width=76):
     if lines and not lines[-1]:
         del lines[-1]
         lines[-1] += '\n'
-    return u'""\n' + u'\n'.join([(prefix + escape(l)) for l in lines])
+    return u'""\n' + u'\n'.join([(prefix + escape(line)) for line in lines])
 
 
 def write_po(fileobj, catalog, width=76, no_location=False, omit_header=False,
@@ -427,14 +432,14 @@ def write_po(fileobj, catalog, width=76, no_location=False, omit_header=False,
                 prefix, _normalize(message.string or '', prefix)
             ))
 
-    messages = list(catalog)
+    sort_by = None
     if sort_output:
-        messages.sort()
+        sort_by = "message"
     elif sort_by_file:
-        messages.sort(lambda x,y: cmp(x.locations, y.locations))
+        sort_by = "location"
 
-    for message in messages:
-        if not message.id: # This is the header "message"
+    for message in _sort_messages(catalog, sort_by=sort_by):
+        if not message.id:  # This is the header "message"
             if omit_header:
                 continue
             comment_header = catalog.header_comment
@@ -453,7 +458,7 @@ def write_po(fileobj, catalog, width=76, no_location=False, omit_header=False,
 
         if not no_location:
             locs = []
-            for filename, lineno in message.locations:
+            for filename, lineno in sorted(message.locations):
                 if lineno:
                     locs.append(u'%s:%d' % (filename.replace(os.sep, '/'), lineno))
                 else:
@@ -474,8 +479,29 @@ def write_po(fileobj, catalog, width=76, no_location=False, omit_header=False,
         _write('\n')
 
     if not ignore_obsolete:
-        for message in catalog.obsolete.values():
+        for message in _sort_messages(
+            catalog.obsolete.values(),
+            sort_by=sort_by
+        ):
             for comment in message.user_comments:
                 _write_comment(comment)
             _write_message(message, prefix='#~ ')
             _write('\n')
+
+
+def _sort_messages(messages, sort_by):
+    """
+    Sort the given message iterable by the given criteria.
+
+    Always returns a list.
+
+    :param messages: An iterable of Messages.
+    :param sort_by: Sort by which criteria? Options are `message` and `location`.
+    :return: list[Message]
+    """
+    messages = list(messages)
+    if sort_by == "message":
+        messages.sort()
+    elif sort_by == "location":
+        messages.sort(key=lambda m: m.locations)
+    return messages
