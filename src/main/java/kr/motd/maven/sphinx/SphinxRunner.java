@@ -7,15 +7,12 @@ import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.security.CodeSource;
-import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.reporting.MavenReportException;
 import org.python.core.Py;
 import org.python.core.PyObject;
 import org.python.core.PySystemState;
@@ -26,7 +23,7 @@ import net.sourceforge.plantuml.UmlDiagram;
 /**
  * Sphinx Runner.
  */
-class SphinxRunner {
+public abstract class SphinxRunner {
 
     private static final String DIST_PREFIX =
             SphinxRunner.class.getPackage().getName().replace('.', '/') + "/dist/";
@@ -34,14 +31,10 @@ class SphinxRunner {
     /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
     private final String plantUmlCommand;
 
-    /** Maven Logging Capability. */
-    private final Log log;
-
     /**
      * Initialize Environment to execute the plugin.
      */
-    SphinxRunner(File sphinxSourceDirectory, Log log) throws MavenReportException {
-        this.log = log;
+    protected SphinxRunner(File sphinxSourceDirectory) {
         if (sphinxSourceDirectory == null) {
             throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
         }
@@ -50,7 +43,7 @@ class SphinxRunner {
         final File plantUmlJar = findPlantUmlJar();
 
         plantUmlCommand = "java -jar " + plantUmlJar.getPath().replace("\\", "\\\\");
-        log.debug("PlantUML command: " + plantUmlCommand);
+        log("PlantUML command: " + plantUmlCommand);
 
         // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
         System.setProperty("java.awt.headless", "true");
@@ -62,12 +55,14 @@ class SphinxRunner {
         PySystemState engineSys = new PySystemState();
         engineSys.path.append(Py.newString(sphinxSourceDirectory.getPath()));
         Py.setSystemState(engineSys);
-        log.debug("Path: " + engineSys.path);
+        log("Path: " + engineSys.path);
     }
 
-    void destroy() {
+    public void destroy() {
         Py.getSystemState().cleanup();
     }
+
+    protected abstract void log(String msg);
 
     /**
      * Execute Python Script using Jython Python Interpreter.
@@ -78,7 +73,7 @@ class SphinxRunner {
     private int executePythonScript(
             String script, String functionName, List<String> args, boolean resultExpected) {
 
-        log.debug("args: " + args);
+        log("args: " + args);
 
         PythonInterpreter pi = new PythonInterpreter();
 
@@ -116,7 +111,7 @@ class SphinxRunner {
     /**
      * Execute Sphinx Documentation Builder.
      */
-    int runSphinx(List<String> args) {
+    public int runSphinx(List<String> args) {
         String invokeSphinxScript = "from sphinx import build_main";
         String functionName = "build_main";
         return executePythonScript(invokeSphinxScript, functionName, args, true);
@@ -125,8 +120,8 @@ class SphinxRunner {
     /**
      * Unpack Sphinx zip file.
      */
-    private void extractSphinx(File sphinxSourceDirectory) throws MavenReportException {
-        log.debug("Extracting Sphinx into: " + sphinxSourceDirectory);
+    private void extractSphinx(File sphinxSourceDirectory) {
+        log("Extracting Sphinx into: " + sphinxSourceDirectory);
 
         try {
             final JarFile jar = new JarFile(findPluginJar(), false);
@@ -142,7 +137,7 @@ class SphinxRunner {
 
                 if (e.isDirectory()) {
                     if (!f.mkdirs() && !f.exists()) {
-                        throw new MavenReportException("failed to create a directory: " + f);
+                        throw new SphinxException("failed to create a directory: " + f);
                     }
                     continue;
                 }
@@ -154,7 +149,7 @@ class SphinxRunner {
                     }
 
                     if (!f.delete()) {
-                        throw new MavenReportException("failed to delete a file: " + f);
+                        throw new SphinxException("failed to delete a file: " + f);
                     }
                 }
 
@@ -179,33 +174,33 @@ class SphinxRunner {
                 }
 
                 if (!tmpF.renameTo(f)) {
-                    throw new MavenReportException("failed to rename a file: " + tmpF + " -> " + f.getName());
+                    throw new SphinxException("failed to rename a file: " + tmpF + " -> " + f.getName());
                 }
             }
         } catch (Exception e) {
-            throw new MavenReportException("failed to extract Sphinx into: " + sphinxSourceDirectory, e);
+            throw new SphinxException("failed to extract Sphinx into: " + sphinxSourceDirectory, e);
         }
     }
 
-    private File findPluginJar() throws MavenReportException {
+    private File findPluginJar() {
         return findJar(SphinxRunner.class, "the plugin JAR");
     }
 
-    private File findPlantUmlJar() throws MavenReportException {
+    private File findPlantUmlJar() {
         return findJar(UmlDiagram.class, "PlantUML JAR");
     }
 
-    private File findJar(Class<?> type, String name) throws MavenReportException {
+    private File findJar(Class<?> type, String name) {
         final CodeSource codeSource = type.getProtectionDomain().getCodeSource();
         if (codeSource == null) {
-            throw new MavenReportException(
+            throw new SphinxException(
                     "failed to get the location of " + name + " (CodeSource not available)");
         }
 
         final URL url = codeSource.getLocation();
-        log.debug(name + ": " + url);
+        log(name + ": " + url);
         if (!"file".equals(url.getProtocol()) || !url.getPath().toLowerCase(Locale.US).endsWith(".jar")) {
-            throw new MavenReportException(
+            throw new SphinxException(
                     "failed to get the location of " + name + " (unexpected URL: " + url + ')');
         }
 

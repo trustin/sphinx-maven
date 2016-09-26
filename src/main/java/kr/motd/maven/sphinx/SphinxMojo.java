@@ -131,7 +131,12 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
         final SphinxRunner sphinxRunner;
         try {
-            sphinxRunner = new SphinxRunner(sphinxSourceDirectory, getLog());
+            sphinxRunner = new SphinxRunner(sphinxSourceDirectory) {
+                @Override
+                protected void log(String msg) {
+                    getLog().debug(msg);
+                }
+            };
         } catch (Exception ex) {
             throw new MojoExecutionException("Failed to extract libraries.", ex);
         }
@@ -296,6 +301,12 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
         try {
             execute();
+        } catch (SphinxException e) {
+            final MavenReportException cause = new MavenReportException(e.getMessage());
+            if (e.getCause() != null) {
+                cause.initCause(e.getCause());
+            }
+            throw cause;
         } catch (Exception e) {
             throw new MavenReportException("Error generating a Sphinx report:", e);
         }
@@ -333,7 +344,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         // if documentation is generated as a report
         if (asReport) {
             // output sphinx doc to outputDirectory/sphinx instead of outputDirectory
-            this.outputDirectory = new File(outputDirectory.getPath() + "/" + sphinxSiteSubDirectory);
+            this.outputDirectory = new File(outputDirectory.getPath() + '/' + sphinxSiteSubDirectory);
         } else {
             this.outputDirectory = outputDirectory;
         }
