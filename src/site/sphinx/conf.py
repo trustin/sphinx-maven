@@ -6,7 +6,7 @@ from recommonmark.parser import CommonMarkParser
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'
 version = '1.5'
-release = '1.5.1.Final'
+release = '1.5.2.Final'
 
 # General options
 needs_sphinx = '1.0'

@@ -93,6 +93,7 @@ public final class SphinxUtil {
         switch (extension) {
             case "buildinfo":
             case "html":
+            case "css":
             case "js":
             case "svg":
             case "txt":
