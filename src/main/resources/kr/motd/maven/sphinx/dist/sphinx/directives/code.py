@@ -107,7 +107,7 @@ class CodeBlock(Directive):
         if linespec:
             try:
                 nlines = len(self.content)
-                hl_lines = [x+1 for x in parselinenos(linespec, nlines)]
+                hl_lines = [x + 1 for x in parselinenos(linespec, nlines)]
             except ValueError as err:
                 document = self.state.document
                 return [document.reporter.warning(str(err), line=self.lineno)]
@@ -133,7 +133,6 @@ class CodeBlock(Directive):
 
         caption = self.options.get('caption')
         if caption:
-            self.options.setdefault('name', nodes.fully_normalize_name(caption))
             try:
                 literal = container_wrapper(self, literal, caption)
             except ValueError as exc:
@@ -171,6 +170,8 @@ class LiteralInclude(Directive):
         'lines': directives.unchanged_required,
         'start-after': directives.unchanged_required,
         'end-before': directives.unchanged_required,
+        'start-at': directives.unchanged_required,
+        'end-at': directives.unchanged_required,
         'prepend': directives.unchanged_required,
         'append': directives.unchanged_required,
         'emphasize-lines': directives.unchanged_required,
@@ -181,13 +182,12 @@ class LiteralInclude(Directive):
     }
 
     def read_with_encoding(self, filename, document, codec_info, encoding):
-        f = None
         try:
-            f = codecs.StreamReaderWriter(open(filename, 'rb'), codec_info[2],
-                                          codec_info[3], 'strict')
-            lines = f.readlines()
-            lines = dedent_lines(lines, self.options.get('dedent'))
-            return lines
+            with codecs.StreamReaderWriter(open(filename, 'rb'), codec_info[2],
+                                           codec_info[3], 'strict') as f:
+                lines = f.readlines()
+                lines = dedent_lines(lines, self.options.get('dedent'))
+                return lines
         except (IOError, OSError):
             return [document.reporter.warning(
                 'Include file %r not found or reading it failed' % filename,
@@ -197,9 +197,6 @@ class LiteralInclude(Directive):
                 'Encoding %r used for reading included file %r seems to '
                 'be wrong, try giving an :encoding: option' %
                 (encoding, filename))]
-        finally:
-            if f is not None:
-                f.close()
 
     def run(self):
         document = self.state.document
@@ -223,6 +220,16 @@ class LiteralInclude(Directive):
            (set(['append', 'prepend']) & set(self.options.keys())):
             return [document.reporter.warning(
                 'Cannot use "lineno-match" and "append" or "prepend"',
+                line=self.lineno)]
+
+        if 'start-after' in self.options and 'start-at' in self.options:
+            return [document.reporter.warning(
+                'Cannot use both "start-after" and "start-at" options',
+                line=self.lineno)]
+
+        if 'end-before' in self.options and 'end-at' in self.options:
+            return [document.reporter.warning(
+                'Cannot use both "end-before" and "end-at" options',
                 line=self.lineno)]
 
         encoding = self.options.get('encoding', env.config.source_encoding)
@@ -259,7 +266,7 @@ class LiteralInclude(Directive):
                     'Object named %r not found in include file %r' %
                     (objectname, filename), line=self.lineno)]
             else:
-                lines = lines[tags[objectname][1]-1: tags[objectname][2]-1]
+                lines = lines[tags[objectname][1] - 1: tags[objectname][2] - 1]
                 if 'lineno-match' in self.options:
                     linenostart = tags[objectname][1]
 
@@ -291,23 +298,35 @@ class LiteralInclude(Directive):
         linespec = self.options.get('emphasize-lines')
         if linespec:
             try:
-                hl_lines = [x+1 for x in parselinenos(linespec, len(lines))]
+                hl_lines = [x + 1 for x in parselinenos(linespec, len(lines))]
             except ValueError as err:
                 return [document.reporter.warning(str(err), line=self.lineno)]
         else:
             hl_lines = None
 
-        startafter = self.options.get('start-after')
-        endbefore = self.options.get('end-before')
-        if startafter is not None or endbefore is not None:
-            use = not startafter
+        start_str = self.options.get('start-after')
+        start_inclusive = False
+        if self.options.get('start-at') is not None:
+            start_str = self.options.get('start-at')
+            start_inclusive = True
+        end_str = self.options.get('end-before')
+        end_inclusive = False
+        if self.options.get('end-at') is not None:
+            end_str = self.options.get('end-at')
+            end_inclusive = True
+        if start_str is not None or end_str is not None:
+            use = not start_str
             res = []
             for line_number, line in enumerate(lines):
-                if not use and startafter and startafter in line:
+                if not use and start_str and start_str in line:
                     if 'lineno-match' in self.options:
                         linenostart += line_number + 1
                     use = True
-                elif use and endbefore and endbefore in line:
+                    if start_inclusive:
+                        res.append(line)
+                elif use and end_str and end_str in line:
+                    if end_inclusive:
+                        res.append(line)
                     break
                 elif use:
                     res.append(line)
@@ -344,7 +363,6 @@ class LiteralInclude(Directive):
         if caption is not None:
             if not caption:
                 caption = self.arguments[0]
-            self.options.setdefault('name', nodes.fully_normalize_name(caption))
             try:
                 retnode = container_wrapper(self, retnode, caption)
             except ValueError as exc:
@@ -359,8 +377,15 @@ class LiteralInclude(Directive):
         return [retnode]
 
 
-directives.register_directive('highlight', Highlight)
-directives.register_directive('highlightlang', Highlight)  # old
-directives.register_directive('code-block', CodeBlock)
-directives.register_directive('sourcecode', CodeBlock)
-directives.register_directive('literalinclude', LiteralInclude)
+def setup(app):
+    directives.register_directive('highlight', Highlight)
+    directives.register_directive('highlightlang', Highlight)  # old
+    directives.register_directive('code-block', CodeBlock)
+    directives.register_directive('sourcecode', CodeBlock)
+    directives.register_directive('literalinclude', LiteralInclude)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

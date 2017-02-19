@@ -17,10 +17,17 @@ from docutils.parsers.rst import Directive, directives, roles
 from sphinx import addnodes
 from sphinx.util.docfields import DocFieldTransformer
 
-# import and register directives
-from sphinx.directives.code import *   # noqa
-from sphinx.directives.other import *  # noqa
-from sphinx.directives.patches import *  # noqa
+# import all directives sphinx provides
+from sphinx.directives.code import (  # noqa
+    Highlight, CodeBlock, LiteralInclude
+)
+from sphinx.directives.other import (  # noqa
+    TocTree, Author, Index, VersionChange, SeeAlso,
+    TabularColumns, Centered, Acks, HList, Only, Include, Class
+)
+from sphinx.directives.patches import (  # noqa
+    Figure, Meta
+)
 
 
 # RE to strip backslash escapes
@@ -160,6 +167,7 @@ class ObjectDescription(Directive):
         self.after_content()
         return [self.indexnode, node]
 
+
 # backwards compatible old name
 DescDirective = ObjectDescription
 
@@ -216,8 +224,15 @@ class DefaultDomain(Directive):
         return []
 
 
-directives.register_directive('default-role', DefaultRole)
-directives.register_directive('default-domain', DefaultDomain)
-directives.register_directive('describe', ObjectDescription)
-# new, more consistent, name
-directives.register_directive('object', ObjectDescription)
+def setup(app):
+    directives.register_directive('default-role', DefaultRole)
+    directives.register_directive('default-domain', DefaultDomain)
+    directives.register_directive('describe', ObjectDescription)
+    # new, more consistent, name
+    directives.register_directive('object', ObjectDescription)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

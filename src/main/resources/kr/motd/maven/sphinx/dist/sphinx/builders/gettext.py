@@ -22,6 +22,7 @@ from six import iteritems
 
 from sphinx.builders import Builder
 from sphinx.util import split_index_msg
+from sphinx.util.tags import Tags
 from sphinx.util.nodes import extract_messages, traverse_translatable_index
 from sphinx.util.osutil import safe_relpath, ensuredir, canon_path
 from sphinx.util.i18n import find_catalog
@@ -79,6 +80,16 @@ class MsgOrigin(object):
         self.uid = uuid4().hex
 
 
+class I18nTags(Tags):
+    """Dummy tags module for I18nBuilder.
+
+    To translate all text inside of only nodes, this class
+    always returns True value even if no tags are defined.
+    """
+    def eval_condition(self, condition):
+        return True
+
+
 class I18nBuilder(Builder):
     """
     General i18n builder.
@@ -93,6 +104,7 @@ class I18nBuilder(Builder):
 
     def init(self):
         Builder.init(self)
+        self.tags = I18nTags()
         self.catalogs = defaultdict(Catalog)
 
     def get_target_uri(self, docname, typ=None):
@@ -149,6 +161,7 @@ class LocalTimeZone(tzinfo):
 
     def dst(self, dt):
         return timedelta(0)
+
 
 ltz = LocalTimeZone()
 
@@ -211,8 +224,7 @@ class MessageCatalogBuilder(I18nBuilder):
             ensuredir(path.join(self.outdir, path.dirname(textdomain)))
 
             pofn = path.join(self.outdir, textdomain + '.pot')
-            pofile = open(pofn, 'w', encoding='utf-8')
-            try:
+            with open(pofn, 'w', encoding='utf-8') as pofile:
                 pofile.write(POHEADER % data)
 
                 for message in catalog.messages:
@@ -235,5 +247,18 @@ class MessageCatalogBuilder(I18nBuilder):
                         replace('\n', '\\n"\n"')
                     pofile.write('msgid "%s"\nmsgstr ""\n\n' % message)
 
-            finally:
-                pofile.close()
+
+def setup(app):
+    app.add_builder(MessageCatalogBuilder)
+
+    app.add_config_value('gettext_compact', True, 'gettext')
+    app.add_config_value('gettext_location', True, 'gettext')
+    app.add_config_value('gettext_uuid', False, 'gettext')
+    app.add_config_value('gettext_auto_build', True, 'env')
+    app.add_config_value('gettext_additional_targets', [], 'env')
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

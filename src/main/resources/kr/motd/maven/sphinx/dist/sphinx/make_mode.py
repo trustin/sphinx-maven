@@ -29,30 +29,30 @@ proj_name = os.getenv('SPHINXPROJ', '<project>')
 
 
 BUILDERS = [
-    ("",      "html",      "to make standalone HTML files"),
-    ("",      "dirhtml",   "to make HTML files named index.html in directories"),
-    ("",      "singlehtml", "to make a single large HTML file"),
-    ("",      "pickle",    "to make pickle files"),
-    ("",      "json",      "to make JSON files"),
-    ("",      "htmlhelp",  "to make HTML files and a HTML help project"),
-    ("",      "qthelp",    "to make HTML files and a qthelp project"),
-    ("",      "devhelp",   "to make HTML files and a Devhelp project"),
-    ("",      "epub",      "to make an epub"),
-    ("",      "latex",     "to make LaTeX files, you can set PAPER=a4 or PAPER=letter"),
-    ("posix", "latexpdf",  "to make LaTeX files and run them through pdflatex"),
-    ("posix", "latexpdfja", "to make LaTeX files and run them through platex/dvipdfmx"),
-    ("",      "text",      "to make text files"),
-    ("",      "man",       "to make manual pages"),
-    ("",      "texinfo",   "to make Texinfo files"),
-    ("posix", "info",      "to make Texinfo files and run them through makeinfo"),
-    ("",      "gettext",   "to make PO message catalogs"),
-    ("",      "changes",   "to make an overview of all changed/added/deprecated items"),
-    ("",      "xml",       "to make Docutils-native XML files"),
-    ("",      "pseudoxml", "to make pseudoxml-XML files for display purposes"),
-    ("",      "linkcheck", "to check all external links for integrity"),
-    ("",      "doctest",   "to run all doctests embedded in the documentation "
-                           "(if enabled)"),
-    ("",      "coverage",  "to run coverage check of the documentation (if enabled)"),
+    ("",      "html",        "to make standalone HTML files"),
+    ("",      "dirhtml",     "to make HTML files named index.html in directories"),
+    ("",      "singlehtml",  "to make a single large HTML file"),
+    ("",      "pickle",      "to make pickle files"),
+    ("",      "json",        "to make JSON files"),
+    ("",      "htmlhelp",    "to make HTML files and an HTML help project"),
+    ("",      "qthelp",      "to make HTML files and a qthelp project"),
+    ("",      "devhelp",     "to make HTML files and a Devhelp project"),
+    ("",      "epub",        "to make an epub"),
+    ("",      "latex",       "to make LaTeX files, you can set PAPER=a4 or PAPER=letter"),
+    ("posix", "latexpdf",    "to make LaTeX and PDF files (default pdflatex)"),
+    ("posix", "latexpdfja",  "to make LaTeX files and run them through platex/dvipdfmx"),
+    ("",      "text",        "to make text files"),
+    ("",      "man",         "to make manual pages"),
+    ("",      "texinfo",     "to make Texinfo files"),
+    ("posix", "info",        "to make Texinfo files and run them through makeinfo"),
+    ("",      "gettext",     "to make PO message catalogs"),
+    ("",      "changes",     "to make an overview of all changed/added/deprecated items"),
+    ("",      "xml",         "to make Docutils-native XML files"),
+    ("",      "pseudoxml",   "to make pseudoxml-XML files for display purposes"),
+    ("",      "linkcheck",   "to check all external links for integrity"),
+    ("",      "doctest",     "to run all doctests embedded in the documentation "
+                             "(if enabled)"),
+    ("",      "coverage",    "to run coverage check of the documentation (if enabled)"),
 ]
 
 
@@ -62,6 +62,7 @@ class Make(object):
         self.srcdir = srcdir
         self.builddir = builddir
         self.opts = opts
+        self.makecmd = os.environ.get('MAKE', 'make')  # refer $MAKE to determine make command
 
     def builddir_join(self, *comps):
         return path.join(self.builddir, *comps)
@@ -78,7 +79,7 @@ class Make(object):
 
     def build_help(self):
         print(bold("Sphinx v%s" % sphinx.__display_version__))
-        print("Please use `make %s' where %s is one of" % ((blue('target'),)*2))
+        print("Please use `make %s' where %s is one of" % ((blue('target'),) * 2))
         for osname, bname, description in BUILDERS:
             if not osname or os.name == osname:
                 print('  %s  %s' % (blue(bname.ljust(10)), description))
@@ -162,13 +163,13 @@ class Make(object):
         if self.run_generic_build('latex') > 0:
             return 1
         with cd(self.builddir_join('latex')):
-            os.system('make all-pdf')
+            os.system('%s all-pdf' % self.makecmd)
 
     def build_latexpdfja(self):
         if self.run_generic_build('latex') > 0:
             return 1
         with cd(self.builddir_join('latex')):
-            os.system('make all-pdf-ja')
+            os.system('%s all-pdf-ja' % self.makecmd)
 
     def build_text(self):
         if self.run_generic_build('text') > 0:
@@ -189,7 +190,7 @@ class Make(object):
         if self.run_generic_build('texinfo') > 0:
             return 1
         with cd(self.builddir_join('texinfo')):
-            os.system('make info')
+            os.system('%s info' % self.makecmd)
 
     def build_gettext(self):
         dtdir = self.builddir_join('gettext', '.doctrees')

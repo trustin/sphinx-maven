@@ -15,6 +15,7 @@ import re
 import sys
 import inspect
 import traceback
+import warnings
 from types import FunctionType, BuiltinFunctionType, MethodType
 
 from six import PY2, iterkeys, iteritems, itervalues, text_type, class_types, \
@@ -31,7 +32,8 @@ from sphinx.application import ExtensionError
 from sphinx.util.nodes import nested_parse_with_titles
 from sphinx.util.compat import Directive
 from sphinx.util.inspect import getargspec, isdescriptor, safe_getmembers, \
-    safe_getattr, object_description, is_builtin_class_method
+    safe_getattr, object_description, is_builtin_class_method, \
+    isenumclass, isenumattribute
 from sphinx.util.docstrings import prepare_docstring
 
 try:
@@ -41,6 +43,11 @@ try:
         typing = None
 except ImportError:
     typing = None
+
+# This type isn't exposed directly in any modules, but can be found
+# here in most Python versions
+MethodDescriptorType = type(type.__subclasses__)
+
 
 #: extended signature RE: with explicit module name separated by ::
 py_ext_sig_re = re.compile(
@@ -86,17 +93,24 @@ class Options(dict):
 
 class _MockModule(object):
     """Used by autodoc_mock_imports."""
+    __file__ = '/dev/null'
+    __path__ = '/dev/null'
+
     def __init__(self, *args, **kwargs):
-        pass
+        self.__all__ = []
 
     def __call__(self, *args, **kwargs):
+        if args and type(args[0]) in [FunctionType, MethodType]:
+            # Appears to be a decorator, pass through unchanged
+            return args[0]
         return _MockModule()
+
+    def _append_submodule(self, submod):
+        self.__all__.append(submod)
 
     @classmethod
     def __getattr__(cls, name):
-        if name in ('__file__', '__path__'):
-            return '/dev/null'
-        elif name[0] == name[0].upper():
+        if name[0] == name[0].upper():
             # Not very good, we assume Uppercase names are classes...
             mocktype = type(name, (), {})
             mocktype.__module__ = __name__
@@ -109,9 +123,12 @@ def mock_import(modname):
     if '.' in modname:
         pkg, _n, mods = modname.rpartition('.')
         mock_import(pkg)
-    mod = _MockModule()
-    sys.modules[modname] = mod
-    return mod
+        if isinstance(sys.modules[pkg], _MockModule):
+            sys.modules[pkg]._append_submodule(mods)
+
+    if modname not in sys.modules:
+        mod = _MockModule()
+        sys.modules[modname] = mod
 
 
 ALL = object()
@@ -130,6 +147,7 @@ def members_set_option(arg):
     if arg is None:
         return ALL
     return set(x.strip() for x in arg.split(','))
+
 
 SUPPRESS = object()
 
@@ -261,6 +279,10 @@ def format_annotation(annotation):
 
     Displaying complex types from ``typing`` relies on its private API.
     """
+    if typing and isinstance(annotation, typing.TypeVar):
+        return annotation.__name__
+    if annotation == Ellipsis:
+        return '...'
     if not isinstance(annotation, type):
         return repr(annotation)
 
@@ -270,9 +292,7 @@ def format_annotation(annotation):
     if annotation.__module__ == 'builtins':
         return annotation.__qualname__
     elif typing:
-        if isinstance(annotation, typing.TypeVar):
-            return annotation.__name__
-        elif hasattr(typing, 'GenericMeta') and \
+        if hasattr(typing, 'GenericMeta') and \
                 isinstance(annotation, typing.GenericMeta):
             # In Python 3.5.2+, all arguments are stored in __args__,
             # whereas __parameters__ only contains generic parameters.
@@ -281,7 +301,12 @@ def format_annotation(annotation):
             # arguments are in __parameters__.
             params = None
             if hasattr(annotation, '__args__'):
-                params = annotation.__args__
+                if annotation.__args__ is None or len(annotation.__args__) <= 2:
+                    params = annotation.__args__
+                else:  # typing.Callable
+                    args = ', '.join(format_annotation(a) for a in annotation.__args__[:-1])
+                    result = format_annotation(annotation.__args__[-1])
+                    return '%s[[%s], %s]' % (qualified_name, args, result)
             elif hasattr(annotation, '__parameters__'):
                 params = annotation.__parameters__
             if params is not None:
@@ -296,10 +321,13 @@ def format_annotation(annotation):
                 return '%s[%s]' % (qualified_name, param_str)
         elif hasattr(typing, 'CallableMeta') and \
                 isinstance(annotation, typing.CallableMeta) and \
-                hasattr(annotation, '__args__') and \
+                getattr(annotation, '__args__', None) is not None and \
                 hasattr(annotation, '__result__'):
+            # Skipped in the case of plain typing.Callable
             args = annotation.__args__
-            if args is Ellipsis:
+            if args is None:
+                return qualified_name
+            elif args is Ellipsis:
                 args_str = '...'
             else:
                 formatted_args = (format_annotation(a) for a in args)
@@ -362,7 +390,9 @@ def formatargspec(function, args, varargs=None, varkw=None, defaults=None,
         formatted.append('*' + format_arg_with_annotation(varargs))
 
     if kwonlyargs:
-        formatted.append('*')
+        if not varargs:
+            formatted.append('*')
+
         for kwarg in kwonlyargs:
             arg_fd = StringIO()
             arg_fd.write(format_arg_with_annotation(kwarg))
@@ -514,9 +544,11 @@ class Documenter(object):
         try:
             dbg('[autodoc] import %s', self.modname)
             for modname in self.env.config.autodoc_mock_imports:
-                dbg('[autodoc] adding a mock module %s!', self.modname)
+                dbg('[autodoc] adding a mock module %s!', modname)
                 mock_import(modname)
-            __import__(self.modname)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=ImportWarning)
+                __import__(self.modname)
             parent = None
             obj = self.module = sys.modules[self.modname]
             dbg('[autodoc] => %r', obj)
@@ -743,6 +775,14 @@ class Documenter(object):
             else:
                 members = [(mname, self.get_attr(self.object, mname, None))
                            for mname in list(iterkeys(obj_dict))]
+
+            # Py34 doesn't have enum members in __dict__.
+            if isenumclass(self.object):
+                members.extend(
+                    item for item in self.object.__members__.items()
+                    if item not in members
+                )
+
         membernames = set(m[0] for m in members)
         # add instance attributes from the analyzer
         for aname in analyzed_member_names:
@@ -1274,7 +1314,7 @@ class ClassDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):
                          u':class:`%s`' % b.__name__ or
                          u':class:`%s.%s`' % (b.__module__, b.__name__)
                          for b in self.object.__bases__]
-                self.add_line(_(u'   Bases: %s') % ', '.join(bases),
+                self.add_line(u'   ' + _(u'Bases: %s') % ', '.join(bases),
                               sourcename)
 
     def get_doc(self, encoding=None, ignore=1):
@@ -1456,10 +1496,13 @@ class AttributeDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):
 
     @classmethod
     def can_document_member(cls, member, membername, isattr, parent):
+        non_attr_types = cls.method_types + (type, MethodDescriptorType)
         isdatadesc = isdescriptor(member) and not \
-            isinstance(member, cls.method_types) and not \
-            type(member).__name__ in ("type", "method_descriptor",
-                                      "instancemethod")
+            isinstance(member, non_attr_types) and not \
+            type(member).__name__ == "instancemethod"
+        # That last condition addresses an obscure case of C-defined
+        # methods using a deprecated type in Python 3, that is not otherwise
+        # exported anywhere by Python
         return isdatadesc or (not isinstance(parent, ModuleDocumenter) and
                               not inspect.isroutine(member) and
                               not isinstance(member, class_types))
@@ -1469,6 +1512,8 @@ class AttributeDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):
 
     def import_object(self):
         ret = ClassLevelDocumenter.import_object(self)
+        if isenumattribute(self.object):
+            self.object = self.object.value
         if isdescriptor(self.object) and \
                 not isinstance(self.object, self.method_types):
             self._datadescriptor = True

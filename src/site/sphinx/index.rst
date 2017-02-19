@@ -44,6 +44,24 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.5.3.Final (28-Sep-2016)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+- Upgraded Sphinx to 1.5.2
+
+  - Added requests 2.13.0
+
+- Upgraded CommonMark to 0.7.3
+- Upgraded docutils to 0.13.1
+- Upgraded future to 0.16.0
+- Upgraded javalang to 0.10.1
+- Upgraded javasphinx to 0.9.15
+- Upgraded Jinja2 to 2.9.5
+- Upgraded PlantUML to 8056
+- Upgraded Pygments to 2.2.0
+- Upgraded pytz to 2016.10
+- Upgraded sphinx_rtd_theme to master (eef98b3)
+- Added PyYAML 3.12 so that a user can read a YAML file from conf.py
+
 1.5.2.Final (28-Sep-2016)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 - Fixed a bug where line ending conversion is not performed on CSS files

@@ -1,4 +1,4 @@
-# $Id: nodes.py 7595 2013-01-21 17:33:56Z milde $
+# $Id: nodes.py 7788 2015-02-16 22:10:52Z milde $
 # Author: David Goodger <goodger@python.org>
 # Maintainer: docutils-develop@lists.sourceforge.net
 # Copyright: This module has been placed in the public domain.
@@ -533,7 +533,7 @@ class Element(Node):
         parts = [self.tagname]
         for name, value in self.attlist():
             if value is None:           # boolean attribute
-                parts.append(name)
+                parts.append('%s="True"' % name)
                 continue
             if isinstance(value, list):
                 values = [serial_escape('%s' % (v,)) for v in value]

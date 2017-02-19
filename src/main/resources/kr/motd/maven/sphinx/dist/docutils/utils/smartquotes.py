@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# :Id: $Id: smartquotes.py 7716 2013-08-21 21:54:57Z milde $
+# :Id: $Id: smartquotes.py 7933 2016-01-13 21:09:13Z milde $
 # :Copyright: © 2010 Günter Milde,
 #             original `SmartyPants`_: © 2003 John Gruber
 #             smartypants.py:          © 2004, 2007 Chad Miller
@@ -43,7 +43,7 @@ Authors
 `John Gruber`_ did all of the hard work of writing this software in Perl for
 `Movable Type`_ and almost all of this useful documentation.  `Chad Miller`_
 ported it to Python to use with Pyblosxom_.
-Adapted to Docutils_ by Günter Milde
+Adapted to Docutils_ by Günter Milde.
 
 Additional Credits
 ==================

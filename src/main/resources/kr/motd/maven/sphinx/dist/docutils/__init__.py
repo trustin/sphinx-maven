@@ -1,4 +1,4 @@
-# $Id: __init__.py 7756 2014-07-06 11:48:05Z grubert $
+# $Id: __init__.py 7984 2016-12-09 09:48:27Z grubert $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -52,7 +52,7 @@ Subpackages:
 
 __docformat__ = 'reStructuredText'
 
-__version__ = '0.12'
+__version__ = '0.13.1'
 """``major.minor.micro`` version number.  The micro number is bumped for API
 changes, for new functionality, and for interim project releases.  The minor
 number is bumped whenever there is a significant project release.  The major

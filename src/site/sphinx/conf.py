@@ -2,11 +2,15 @@
 
 import sys, os
 from recommonmark.parser import CommonMarkParser
+import yaml
+
+with open('test.yaml', 'r') as stream:
+    print(yaml.load(stream))
 
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'
 version = '1.5'
-release = '1.5.2.Final'
+release = '1.5.3.Final'
 
 # General options
 needs_sphinx = '1.0'

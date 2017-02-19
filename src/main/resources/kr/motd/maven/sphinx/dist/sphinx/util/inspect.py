@@ -60,7 +60,7 @@ if PY3:
             raise TypeError('%r is not a Python function' % func)
         return inspect.getfullargspec(func)
 
-else:  # 2.6, 2.7
+else:  # 2.7
     from functools import partial
 
     def getargspec(func):
@@ -93,6 +93,25 @@ else:  # 2.6, 2.7
                 except IndexError:
                     pass
         return inspect.ArgSpec(args, varargs, varkw, func_defaults)
+
+try:
+    import enum
+except ImportError:
+    enum = None
+
+
+def isenumclass(x):
+    """Check if the object is subclass of enum."""
+    if enum is None:
+        return False
+    return issubclass(x, enum.Enum)
+
+
+def isenumattribute(x):
+    """Check if the object is attribute of enum."""
+    if enum is None:
+        return False
+    return isinstance(x, enum.Enum)
 
 
 def isdescriptor(x):

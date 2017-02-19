@@ -148,7 +148,7 @@ class JSXRefRole(XRefRole):
                 title = title[1:]
                 dot = title.rfind('.')
                 if dot != -1:
-                    title = title[dot+1:]
+                    title = title[dot + 1:]
         if target[0:1] == '.':
             target = target[1:]
             refnode['refspecific'] = True
@@ -234,3 +234,13 @@ class JavaScriptDomain(Domain):
         for refname, (docname, type) in list(self.data['objects'].items()):
             yield refname, refname, type, docname, \
                 refname.replace('$', '_S_'), 1
+
+
+def setup(app):
+    app.add_domain(JavaScriptDomain)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

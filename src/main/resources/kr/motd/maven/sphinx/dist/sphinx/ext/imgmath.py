@@ -22,6 +22,7 @@ from six import text_type
 from docutils import nodes
 
 import sphinx
+from sphinx.locale import _
 from sphinx.errors import SphinxError, ExtensionError
 from sphinx.util.png import read_png_depth, write_png_depth
 from sphinx.util.osutil import ensuredir, ENOENT, cd
@@ -216,7 +217,7 @@ def get_tooltip(self, node):
 
 def html_visit_math(self, node):
     try:
-        fname, depth = render_math(self, '$'+node['latex']+'$')
+        fname, depth = render_math(self, '$' + node['latex'] + '$')
     except MathExtError as exc:
         msg = text_type(exc)
         sm = nodes.system_message(msg, type='WARNING', level=2,
@@ -245,15 +246,18 @@ def html_visit_displaymath(self, node):
     try:
         fname, depth = render_math(self, latex)
     except MathExtError as exc:
-        sm = nodes.system_message(str(exc), type='WARNING', level=2,
+        msg = text_type(exc)
+        sm = nodes.system_message(msg, type='WARNING', level=2,
                                   backrefs=[], source=node['latex'])
         sm.walkabout(self)
-        self.builder.warn('inline latex %r: ' % node['latex'] + str(exc))
+        self.builder.warn('inline latex %r: ' % node['latex'] + msg)
         raise nodes.SkipNode
     self.body.append(self.starttag(node, 'div', CLASS='math'))
     self.body.append('<p>')
     if node['number']:
-        self.body.append('<span class="eqno">(%s)</span>' % node['number'])
+        self.body.append('<span class="eqno">(%s)' % node['number'])
+        self.add_permalink_ref(node, _('Permalink to this equation'))
+        self.body.append('</span>')
     if fname is None:
         # something failed -- use text-only as a bad substitute
         self.body.append('<span class="math">%s</span></p>\n</div>' %

@@ -141,7 +141,7 @@ class WebSupportBuilder(PickleHTMLBuilder):
         # "show source" link
         if ctx.get('sourcename'):
             source_name = path.join(self.staticdir,
-                                    '_sources',  os_path(ctx['sourcename']))
+                                    '_sources', os_path(ctx['sourcename']))
             ensuredir(path.dirname(source_name))
             copyfile(self.env.doc2path(pagename), source_name)
 
@@ -165,3 +165,13 @@ class WebSupportBuilder(PickleHTMLBuilder):
 
     def dump_search_index(self):
         self.indexer.finish_indexing()
+
+
+def setup(app):
+    app.add_builder(WebSupportBuilder)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

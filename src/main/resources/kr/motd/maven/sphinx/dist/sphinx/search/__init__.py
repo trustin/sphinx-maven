@@ -15,9 +15,10 @@ from six.moves import cPickle as pickle
 from docutils.nodes import raw, comment, title, Text, NodeVisitor, SkipNode
 from os import path
 
+import sphinx
 from sphinx.util import jsdump, rpartition
 from sphinx.util.pycompat import htmlescape
-
+from sphinx.search.jssplitter import splitter_code
 
 class SearchLanguage(object):
     """
@@ -180,23 +181,38 @@ class WordCollector(NodeVisitor):
         self.found_title_words = []
         self.lang = lang
 
+    def is_meta_keywords(self, node, nodetype):
+        if isinstance(node, sphinx.addnodes.meta) and node.get('name') == 'keywords':
+            meta_lang = node.get('lang')
+            if meta_lang is None:  # lang not specified
+                return True
+            elif meta_lang == self.lang.lang:  # matched to html_search_language
+                return True
+
+        return False
+
     def dispatch_visit(self, node):
         nodetype = type(node)
         if issubclass(nodetype, comment):
             raise SkipNode
         if issubclass(nodetype, raw):
-            # Some people might put content in raw HTML that should be searched,
-            # so we just amateurishly strip HTML tags and index the remaining
-            # content
-            nodetext = re.sub(r'(?is)<style.*?</style>', '', node.astext())
-            nodetext = re.sub(r'(?is)<script.*?</script>', '', nodetext)
-            nodetext = re.sub(r'<[^<]+?>', '', nodetext)
-            self.found_words.extend(self.lang.split(nodetext))
+            if 'html' in node.get('format', '').split():
+                # Some people might put content in raw HTML that should be searched,
+                # so we just amateurishly strip HTML tags and index the remaining
+                # content
+                nodetext = re.sub(r'(?is)<style.*?</style>', '', node.astext())
+                nodetext = re.sub(r'(?is)<script.*?</script>', '', nodetext)
+                nodetext = re.sub(r'<[^<]+?>', '', nodetext)
+                self.found_words.extend(self.lang.split(nodetext))
             raise SkipNode
         if issubclass(nodetype, Text):
             self.found_words.extend(self.lang.split(node.astext()))
         elif issubclass(nodetype, title):
             self.found_title_words.extend(self.lang.split(node.astext()))
+        elif self.is_meta_keywords(node, nodetype):
+            keywords = node['content']
+            keywords = [keyword.strip() for keyword in keywords.split(',')]
+            self.found_words.extend(keywords)
 
 
 class IndexBuilder(object):
@@ -211,11 +227,13 @@ class IndexBuilder(object):
 
     def __init__(self, env, lang, options, scoring):
         self.env = env
-        # filename -> title
+        # docname -> title
         self._titles = {}
-        # stemmed word -> set(filenames)
+        # docname -> filename
+        self._filenames = {}
+        # stemmed word -> set(docname)
         self._mapping = {}
-        # stemmed words in titles -> set(filenames)
+        # stemmed words in titles -> set(docname)
         self._title_mapping = {}
         # word -> stemmed word
         self._stem_cache = {}
@@ -241,6 +259,7 @@ class IndexBuilder(object):
                 self.js_scorer_code = fp.read().decode('utf-8')
         else:
             self.js_scorer_code = u''
+        self.js_splitter_code = splitter_code
 
     def load(self, stream, format):
         """Reconstruct from frozen data."""
@@ -323,15 +342,16 @@ class IndexBuilder(object):
 
     def freeze(self):
         """Create a usable data structure for serializing."""
-        filenames, titles = zip(*sorted(self._titles.items()))
-        fn2index = dict((f, i) for (i, f) in enumerate(filenames))
+        docnames, titles = zip(*sorted(self._titles.items()))
+        filenames = [self._filenames.get(docname) for docname in docnames]
+        fn2index = dict((f, i) for (i, f) in enumerate(docnames))
         terms, title_terms = self.get_terms(fn2index)
 
         objects = self.get_objects(fn2index)  # populates _objtypes
         objtypes = dict((v, k[0] + ':' + k[1])
                         for (k, v) in iteritems(self._objtypes))
         objnames = self._objnames
-        return dict(filenames=filenames, titles=titles, terms=terms,
+        return dict(docnames=docnames, filenames=filenames, titles=titles, terms=terms,
                     objects=objects, objtypes=objtypes, objnames=objnames,
                     titleterms=title_terms, envversion=self.env.version)
 
@@ -350,9 +370,10 @@ class IndexBuilder(object):
         for wordnames in itervalues(self._title_mapping):
             wordnames.intersection_update(filenames)
 
-    def feed(self, filename, title, doctree):
+    def feed(self, docname, filename, title, doctree):
         """Feed a doctree to the index."""
-        self._titles[filename] = title
+        self._titles[docname] = title
+        self._filenames[docname] = filename
 
         visitor = WordCollector(doctree, self.lang)
         doctree.walk(visitor)
@@ -367,26 +388,33 @@ class IndexBuilder(object):
         _filter = self.lang.word_filter
 
         for word in visitor.found_title_words:
-            word = stem(word)
-            if _filter(word):
-                self._title_mapping.setdefault(word, set()).add(filename)
+            stemmed_word = stem(word)
+            if _filter(stemmed_word):
+                self._title_mapping.setdefault(stemmed_word, set()).add(docname)
+            elif _filter(word): # stemmer must not remove words from search index
+                self._title_mapping.setdefault(word, set()).add(docname)
 
         for word in visitor.found_words:
-            word = stem(word)
-            if word not in self._title_mapping and _filter(word):
-                self._mapping.setdefault(word, set()).add(filename)
+            stemmed_word = stem(word)
+            # again, stemmer must not remove words from search index
+            if not _filter(stemmed_word) and _filter(word):
+                stemmed_word = word
+            already_indexed = docname in self._title_mapping.get(stemmed_word, [])
+            if _filter(stemmed_word) and not already_indexed:
+                self._mapping.setdefault(stemmed_word, set()).add(docname)
 
     def context_for_searchtool(self):
         return dict(
             search_language_stemming_code = self.lang.js_stemmer_code,
             search_language_stop_words = jsdump.dumps(sorted(self.lang.stopwords)),
             search_scorer_tool = self.js_scorer_code,
+            search_word_splitter_code = self.js_splitter_code,
         )
 
     def get_js_stemmer_rawcode(self):
         if self.lang.js_stemmer_rawcode:
             return path.join(
-                path.dirname(path.abspath(__file__)),
+                sphinx.package_dir, 'search',
                 'non-minified-js',
                 self.lang.js_stemmer_rawcode
             )

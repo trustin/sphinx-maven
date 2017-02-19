@@ -1,4 +1,4 @@
-# $Id: __init__.py 7717 2013-08-21 22:01:21Z milde $
+# $Id: __init__.py 7899 2015-06-03 22:02:46Z timehorse $
 # Author: Dave Kuhlman <dkuhlman@rexx.com>
 # Copyright: This module has been placed in the public domain.
 
@@ -58,7 +58,7 @@ try:
     import pygments.lexers
     from pygmentsformatter import OdtPygmentsProgFormatter, \
         OdtPygmentsLaTeXFormatter
-except ImportError, exp:
+except (ImportError, SyntaxError), exp:
     pygments = None
 
 # check for the Python Imaging Library
@@ -594,9 +594,7 @@ class Writer(writers.Writer):
             if source is None:
                 continue
             try:
-                # encode/decode
-                destination1 = destination.decode('latin-1').encode('utf-8')
-                zfile.write(source, destination1)
+                zfile.write(source, destination)
             except OSError, e:
                 self.document.reporter.warning(
                     "Can't open file %s." % (source, ))
@@ -872,6 +870,8 @@ class ODFTranslator(nodes.GenericNodeVisitor):
         self.table_styles = None
         self.in_citation = False
 
+        # Keep track of nested styling classes
+        self.inline_style_count_stack = []
 
     def get_str_stylesheet(self):
         return self.str_stylesheet
@@ -2399,14 +2399,26 @@ class ODFTranslator(nodes.GenericNodeVisitor):
 
     def visit_inline(self, node):
         styles = node.attributes.get('classes', ())
-        if len(styles) > 0:
-            inline_style =  styles[0]
-        el = SubElement(self.current_element, 'text:span',
-            attrib={'text:style-name': self.rststyle(inline_style)})
+        if styles:
+            el = self.current_element
+            for inline_style in styles:
+                el = SubElement(el, 'text:span',
+                                attrib={'text:style-name':
+                                        self.rststyle(inline_style)})
+            count = len(styles)
+        else:
+            # No style was specified so use a default style (old code
+            # crashed if no style was given)
+            el = SubElement(self.current_element, 'text:span')
+            count = 1
+
         self.set_current_element(el)
+        self.inline_style_count_stack.append(count)
 
     def depart_inline(self, node):
-        self.set_to_parent()
+        count = self.inline_style_count_stack.pop()
+        for x in range(count):
+            self.set_to_parent()
 
     def _calculate_code_block_padding(self, line):
         count = 0

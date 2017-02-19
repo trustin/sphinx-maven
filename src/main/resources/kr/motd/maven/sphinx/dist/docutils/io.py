@@ -1,4 +1,4 @@
-# $Id: io.py 7596 2013-01-25 13:42:17Z milde $
+# $Id: io.py 7864 2015-04-12 09:57:05Z milde $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -369,9 +369,9 @@ class FileOutput(Output):
         if ('b' not in self.mode and sys.version_info < (3,0)
             or check_encoding(self.destination, self.encoding) is False
            ):
-            if sys.version_info >= (3,0) and os.linesep != '\n':
-                data = data.replace('\n', os.linesep) # fix endings
             data = self.encode(data)
+            if sys.version_info >= (3,0) and os.linesep != '\n':
+                data = data.replace(b('\n'), b(os.linesep)) # fix endings
 
         try: # In Python < 2.5, try...except has to be nested in try...finally.
             try:

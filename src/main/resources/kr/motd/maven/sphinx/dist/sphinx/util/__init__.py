@@ -8,6 +8,7 @@
     :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+from __future__ import absolute_import
 
 import os
 import re
@@ -18,20 +19,17 @@ import posixpath
 import traceback
 import unicodedata
 from os import path
-from codecs import open, BOM_UTF8
+from codecs import BOM_UTF8
 from collections import deque
 
 from six import iteritems, text_type, binary_type
 from six.moves import range
 from six.moves.urllib.parse import urlsplit, urlunsplit, quote_plus, parse_qsl, urlencode
-import docutils
 from docutils.utils import relative_path
 
-import jinja2
-
-import sphinx
 from sphinx.errors import PycodeError, SphinxParallelError, ExtensionError
 from sphinx.util.console import strip_colors
+from sphinx.util.fileutil import copy_asset_file
 from sphinx.util.osutil import fs_encoding
 
 # import other utilities; partly for backwards compatibility, so don't
@@ -100,7 +98,7 @@ def get_matching_docs(dirname, suffixes, exclude_matchers=()):
     for filename in get_matching_files(dirname, exclude_matchers):
         for suffixpattern in suffixpatterns:
             if fnmatch.fnmatch(filename, suffixpattern):
-                yield filename[:-len(suffixpattern)+1]
+                yield filename[:-len(suffixpattern) + 1]
                 break
 
 
@@ -148,7 +146,7 @@ class FilenameUniqDict(dict):
 
 def copy_static_entry(source, targetdir, builder, context={},
                       exclude_matchers=(), level=0):
-    """Copy a HTML builder static_path entry from source to targetdir.
+    """[DEPRECATED] Copy a HTML builder static_path entry from source to targetdir.
 
     Handles all possible cases of files, directories and subdirectories.
     """
@@ -158,16 +156,7 @@ def copy_static_entry(source, targetdir, builder, context={},
             if matcher(relpath):
                 return
     if path.isfile(source):
-        target = path.join(targetdir, path.basename(source))
-        if source.lower().endswith('_t') and builder.templates:
-            # templated!
-            fsrc = open(source, 'r', encoding='utf-8')
-            fdst = open(target[:-2], 'w', encoding='utf-8')
-            fdst.write(builder.templates.render_string(fsrc.read(), context))
-            fsrc.close()
-            fdst.close()
-        else:
-            copyfile(source, target)
+        copy_asset_file(source, targetdir, context, builder.templates)
     elif path.isdir(source):
         if not path.isdir(targetdir):
             os.mkdir(targetdir)
@@ -178,39 +167,9 @@ def copy_static_entry(source, targetdir, builder, context={},
             if path.isdir(path.join(source, entry)):
                 newtarget = path.join(targetdir, entry)
             copy_static_entry(path.join(source, entry), newtarget,
-                              builder, context, level=level+1,
+                              builder, context, level=level + 1,
                               exclude_matchers=exclude_matchers)
 
-
-def copy_extra_entry(source, targetdir, exclude_matchers=()):
-    """Copy a HTML builder extra_path entry from source to targetdir.
-
-    Handles all possible cases of files, directories and subdirectories.
-    """
-    def excluded(path):
-        relpath = relative_path(os.path.dirname(source), path)
-        return any(matcher(relpath) for matcher in exclude_matchers)
-
-    def copy_extra_file(source_, targetdir_):
-        if not excluded(source_):
-            target = path.join(targetdir_, os.path.basename(source_))
-            copyfile(source_, target)
-
-    if os.path.isfile(source):
-        copy_extra_file(source, targetdir)
-        return
-
-    for root, dirs, files in os.walk(source):
-        reltargetdir = os.path.join(targetdir, relative_path(source, root))
-        for dir in dirs[:]:
-            if excluded(os.path.join(root, dir)):
-                dirs.remove(dir)
-            else:
-                target = os.path.join(reltargetdir, dir)
-                if not path.exists(target):
-                    os.mkdir(target)
-        for file in files:
-            copy_extra_file(os.path.join(root, file), reltargetdir)
 
 _DEBUG_HEADER = '''\
 # Sphinx version: %s
@@ -225,6 +184,9 @@ _DEBUG_HEADER = '''\
 
 def save_traceback(app):
     """Save the current exception's traceback in a temporary file."""
+    import sphinx
+    import jinja2
+    import docutils
     import platform
     exc = sys.exc_info()[1]
     if isinstance(exc, SphinxParallelError):
@@ -249,9 +211,10 @@ def save_traceback(app):
             modfile = getattr(extmod, '__file__', 'unknown')
             if isinstance(modfile, bytes):
                 modfile = modfile.decode(fs_encoding, 'replace')
-            os.write(fd, ('#   %s (%s) from %s\n' % (
-                extname, app._extension_metadata[extname]['version'],
-                modfile)).encode('utf-8'))
+            version = app._extension_metadata[extname]['version']
+            if version != 'builtin':
+                os.write(fd, ('#   %s (%s) from %s\n' %
+                              (extname, version, modfile)).encode('utf-8'))
     os.write(fd, exc_format.encode('utf-8'))
     os.close(fd)
     return path
@@ -397,9 +360,9 @@ def parselinenos(spec, total):
             if len(begend) > 2:
                 raise ValueError
             if len(begend) == 1:
-                items.append(int(begend[0])-1)
+                items.append(int(begend[0]) - 1)
             else:
-                start = (begend[0] == '') and 0 or int(begend[0])-1
+                start = (begend[0] == '') and 0 or int(begend[0]) - 1
                 end = (begend[1] == '') and total or int(begend[1])
                 items.extend(range(start, end))
         except Exception:
@@ -437,13 +400,13 @@ def rpartition(s, t):
     """Similar to str.rpartition from 2.5, but doesn't return the separator."""
     i = s.rfind(t)
     if i != -1:
-        return s[:i], s[i+len(t):]
+        return s[:i], s[i + len(t):]
     return '', s
 
 
 def split_into(n, type, value):
     """Split an index entry into a given number of parts at semicolons."""
-    parts = [x.strip() for x in value.split(';', n-1)]
+    parts = [x.strip() for x in value.split(';', n - 1)]
     if sum(1 for part in parts if part) < n:
         raise ValueError('invalid %s index entry %r' % (type, value))
     return parts
@@ -544,7 +507,7 @@ def encode_uri(uri):
 
 
 def split_docinfo(text):
-    docinfo_re = re.compile('\A((?:\s*:\w+:.*?\n)+)', re.M)
+    docinfo_re = re.compile('\A((?:\s*:\w+:.*?\n(?:[ \t]+.*?\n)*)+)', re.M)
     result = docinfo_re.split(text, 1)
     if len(result) == 1:
         return '', result[0]

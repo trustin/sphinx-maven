@@ -1,4 +1,4 @@
-# $Id: states.py 7640 2013-03-25 20:57:52Z milde $
+# $Id: states.py 7958 2016-07-28 21:52:14Z milde $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -225,7 +225,6 @@ class RSTState(StateWS):
         # enable the reporter to determine source and source-line
         if not hasattr(self.reporter, 'get_source_and_line'):
             self.reporter.get_source_and_line = self.state_machine.get_source_and_line
-            # print "adding get_source_and_line to reporter", self.state_machine.input_offset
 
 
     def goto_line(self, abs_line_offset):
@@ -464,12 +463,142 @@ class Inliner:
     """
 
     def __init__(self):
+        pass
+
+    def init_customizations(self, settings):
+        # lookahead and look-behind expressions for inline markup rules
+        if settings.character_level_inline_markup:
+            start_string_prefix = u'(^|(?<!\x00))'
+            end_string_suffix = u''
+        else:
+            start_string_prefix = (u'(^|(?<=\\s|[%s%s]))' %
+                                   (punctuation_chars.openers,
+                                    punctuation_chars.delimiters))
+            end_string_suffix = (u'($|(?=\\s|[\x00%s%s%s]))' %
+                                 (punctuation_chars.closing_delimiters,
+                                  punctuation_chars.delimiters,
+                                  punctuation_chars.closers))
+
+        args = locals().copy()
+        args.update(vars(self.__class__))
+
+        parts = ('initial_inline', start_string_prefix, '',
+           [('start', '', self.non_whitespace_after, # simple start-strings
+             [r'\*\*',                # strong
+              r'\*(?!\*)',            # emphasis but not strong
+              r'``',                  # literal
+              r'_`',                  # inline internal target
+              r'\|(?!\|)']            # substitution reference
+             ),
+            ('whole', '', end_string_suffix, # whole constructs
+             [# reference name & end-string
+              r'(?P<refname>%s)(?P<refend>__?)' % self.simplename,
+              ('footnotelabel', r'\[', r'(?P<fnend>\]_)',
+               [r'[0-9]+',               # manually numbered
+                r'\#(%s)?' % self.simplename, # auto-numbered (w/ label?)
+                r'\*',                   # auto-symbol
+                r'(?P<citationlabel>%s)' % self.simplename] # citation reference
+               )
+              ]
+             ),
+            ('backquote',             # interpreted text or phrase reference
+             '(?P<role>(:%s:)?)' % self.simplename, # optional role
+             self.non_whitespace_after,
+             ['`(?!`)']               # but not literal
+             )
+            ]
+           )
+
+        self.patterns = Struct(
+          initial=build_regexp(parts),
+          emphasis=re.compile(self.non_whitespace_escape_before
+                              + r'(\*)' + end_string_suffix, re.UNICODE),
+          strong=re.compile(self.non_whitespace_escape_before
+                            + r'(\*\*)' + end_string_suffix, re.UNICODE),
+          interpreted_or_phrase_ref=re.compile(
+              r"""
+              %(non_unescaped_whitespace_escape_before)s
+              (
+                `
+                (?P<suffix>
+                  (?P<role>:%(simplename)s:)?
+                  (?P<refend>__?)?
+                )
+              )
+              %(end_string_suffix)s
+              """ % args, re.VERBOSE | re.UNICODE),
+          embedded_link=re.compile(
+              r"""
+              (
+                (?:[ \n]+|^)            # spaces or beginning of line/string
+                <                       # open bracket
+                %(non_whitespace_after)s
+                (([^<>]|\x00[<>])+)     # anything but unescaped angle brackets
+                %(non_whitespace_escape_before)s
+                >                       # close bracket
+              )
+              $                         # end of string
+              """ % args, re.VERBOSE | re.UNICODE),
+          literal=re.compile(self.non_whitespace_before + '(``)'
+                             + end_string_suffix),
+          target=re.compile(self.non_whitespace_escape_before
+                            + r'(`)' + end_string_suffix),
+          substitution_ref=re.compile(self.non_whitespace_escape_before
+                                      + r'(\|_{0,2})'
+                                      + end_string_suffix),
+          email=re.compile(self.email_pattern % args + '$',
+                           re.VERBOSE | re.UNICODE),
+          uri=re.compile(
+                (r"""
+                %(start_string_prefix)s
+                (?P<whole>
+                  (?P<absolute>           # absolute URI
+                    (?P<scheme>             # scheme (http, ftp, mailto)
+                      [a-zA-Z][a-zA-Z0-9.+-]*
+                    )
+                    :
+                    (
+                      (                       # either:
+                        (//?)?                  # hierarchical URI
+                        %(uric)s*               # URI characters
+                        %(uri_end)s             # final URI char
+                      )
+                      (                       # optional query
+                        \?%(uric)s*
+                        %(uri_end)s
+                      )?
+                      (                       # optional fragment
+                        \#%(uric)s*
+                        %(uri_end)s
+                      )?
+                    )
+                  )
+                |                       # *OR*
+                  (?P<email>              # email address
+                    """ + self.email_pattern + r"""
+                  )
+                )
+                %(end_string_suffix)s
+                """) % args, re.VERBOSE | re.UNICODE),
+          pep=re.compile(
+                r"""
+                %(start_string_prefix)s
+                (
+                  (pep-(?P<pepnum1>\d+)(.txt)?) # reference to source file
+                |
+                  (PEP\s+(?P<pepnum2>\d+))      # reference by name
+                )
+                %(end_string_suffix)s""" % args, re.VERBOSE | re.UNICODE),
+          rfc=re.compile(
+                r"""
+                %(start_string_prefix)s
+                (RFC(-|\s+)?(?P<rfcnum>\d+))
+                %(end_string_suffix)s""" % args, re.VERBOSE | re.UNICODE))
+
         self.implicit_dispatch = [(self.patterns.uri, self.standalone_uri),]
         """List of (pattern, bound method) tuples, used by
         `self.implicit_inline`."""
 
-    def init_customizations(self, settings):
-        """Setting-based customizations; run when parsing begins."""
         if settings.pep_references:
             self.implicit_dispatch.append((self.patterns.pep,
                                            self.pep_reference))
@@ -527,14 +656,6 @@ class Inliner:
 
     # Inline object recognition
     # -------------------------
-    # lookahead and look-behind expressions for inline markup rules
-    start_string_prefix = (u'(^|(?<=\\s|[%s%s]))' %
-                           (punctuation_chars.openers,
-                            punctuation_chars.delimiters))
-    end_string_suffix = (u'($|(?=\\s|[\x00%s%s%s]))' %
-                         (punctuation_chars.closing_delimiters,
-                          punctuation_chars.delimiters,
-                          punctuation_chars.closers))
     # print start_string_prefix.encode('utf8')
     # TODO: support non-ASCII whitespace in the following 4 patterns?
     non_whitespace_before = r'(?<![ \n])'
@@ -560,118 +681,6 @@ class Inliner:
           %(emailc)s+(?:\.%(emailc)s*)*   # host
           %(uri_end)s                     # final URI char
           """
-    parts = ('initial_inline', start_string_prefix, '',
-             [('start', '', non_whitespace_after,  # simple start-strings
-               [r'\*\*',                # strong
-                r'\*(?!\*)',            # emphasis but not strong
-                r'``',                  # literal
-                r'_`',                  # inline internal target
-                r'\|(?!\|)']            # substitution reference
-               ),
-              ('whole', '', end_string_suffix, # whole constructs
-               [# reference name & end-string
-                r'(?P<refname>%s)(?P<refend>__?)' % simplename,
-                ('footnotelabel', r'\[', r'(?P<fnend>\]_)',
-                 [r'[0-9]+',               # manually numbered
-                  r'\#(%s)?' % simplename, # auto-numbered (w/ label?)
-                  r'\*',                   # auto-symbol
-                  r'(?P<citationlabel>%s)' % simplename] # citation reference
-                 )
-                ]
-               ),
-              ('backquote',             # interpreted text or phrase reference
-               '(?P<role>(:%s:)?)' % simplename, # optional role
-               non_whitespace_after,
-               ['`(?!`)']               # but not literal
-               )
-              ]
-             )
-    patterns = Struct(
-          initial=build_regexp(parts),
-          emphasis=re.compile(non_whitespace_escape_before
-                              + r'(\*)' + end_string_suffix, re.UNICODE),
-          strong=re.compile(non_whitespace_escape_before
-                            + r'(\*\*)' + end_string_suffix, re.UNICODE),
-          interpreted_or_phrase_ref=re.compile(
-              r"""
-              %(non_unescaped_whitespace_escape_before)s
-              (
-                `
-                (?P<suffix>
-                  (?P<role>:%(simplename)s:)?
-                  (?P<refend>__?)?
-                )
-              )
-              %(end_string_suffix)s
-              """ % locals(), re.VERBOSE | re.UNICODE),
-          embedded_link=re.compile(
-              r"""
-              (
-                (?:[ \n]+|^)            # spaces or beginning of line/string
-                <                       # open bracket
-                %(non_whitespace_after)s
-                ([^<>\x00]+(\x00_)?)    # anything but angle brackets & nulls
-                                        # except escaped trailing low line
-                %(non_whitespace_before)s
-                >                       # close bracket w/o whitespace before
-              )
-              $                         # end of string
-              """ % locals(), re.VERBOSE | re.UNICODE),
-          literal=re.compile(non_whitespace_before + '(``)'
-                             + end_string_suffix),
-          target=re.compile(non_whitespace_escape_before
-                            + r'(`)' + end_string_suffix),
-          substitution_ref=re.compile(non_whitespace_escape_before
-                                      + r'(\|_{0,2})'
-                                      + end_string_suffix),
-          email=re.compile(email_pattern % locals() + '$',
-                           re.VERBOSE | re.UNICODE),
-          uri=re.compile(
-                (r"""
-                %(start_string_prefix)s
-                (?P<whole>
-                  (?P<absolute>           # absolute URI
-                    (?P<scheme>             # scheme (http, ftp, mailto)
-                      [a-zA-Z][a-zA-Z0-9.+-]*
-                    )
-                    :
-                    (
-                      (                       # either:
-                        (//?)?                  # hierarchical URI
-                        %(uric)s*               # URI characters
-                        %(uri_end)s             # final URI char
-                      )
-                      (                       # optional query
-                        \?%(uric)s*
-                        %(uri_end)s
-                      )?
-                      (                       # optional fragment
-                        \#%(uric)s*
-                        %(uri_end)s
-                      )?
-                    )
-                  )
-                |                       # *OR*
-                  (?P<email>              # email address
-                    """ + email_pattern + r"""
-                  )
-                )
-                %(end_string_suffix)s
-                """) % locals(), re.VERBOSE | re.UNICODE),
-          pep=re.compile(
-                r"""
-                %(start_string_prefix)s
-                (
-                  (pep-(?P<pepnum1>\d+)(.txt)?) # reference to source file
-                |
-                  (PEP\s+(?P<pepnum2>\d+))      # reference by name
-                )
-                %(end_string_suffix)s""" % locals(), re.VERBOSE | re.UNICODE),
-          rfc=re.compile(
-                r"""
-                %(start_string_prefix)s
-                (RFC(-|\s+)?(?P<rfcnum>\d+))
-                %(end_string_suffix)s""" % locals(), re.VERBOSE | re.UNICODE))
 
     def quoted_start(self, match):
         """Test if inline markup start-string is 'quoted'.
@@ -787,8 +796,10 @@ class Inliner:
         match = self.patterns.embedded_link.search(escaped)
         if match: # embedded <URI> or <alias_>
             text = unescape(escaped[:match.start(0)])
-            aliastext = unescape(match.group(2), restore_backslashes=True)
-            if aliastext.endswith('_') and not (aliastext.endswith(r'\_')
+            aliastext = match.group(2)
+            underscore_escaped = aliastext.endswith('\x00_')
+            aliastext = unescape(aliastext)
+            if aliastext.endswith('_') and not (underscore_escaped
                                         or self.patterns.uri.match(aliastext)):
                 aliastype = 'name'
                 alias = normalize_name(aliastext[:-1])
@@ -1230,6 +1241,8 @@ class Body(RSTState):
     def bullet(self, match, context, next_state):
         """Bullet list item."""
         bulletlist = nodes.bullet_list()
+        (bulletlist.source,
+         bulletlist.line) = self.state_machine.get_source_and_line()
         self.parent += bulletlist
         bulletlist['bullet'] = match.string[0]
         i, blank_finish = self.list_item(match.end())
@@ -1460,6 +1473,7 @@ class Body(RSTState):
     def option_marker(self, match, context, next_state):
         """Option list item."""
         optionlist = nodes.option_list()
+        (optionlist.source, optionlist.line) = self.state_machine.get_source_and_line()
         try:
             listitem, blank_finish = self.option_list_item(match)
         except MarkupError, error:
@@ -1547,6 +1561,9 @@ class Body(RSTState):
 
     def doctest(self, match, context, next_state):
         data = '\n'.join(self.state_machine.get_text_block())
+        # TODO: prepend class value ['pycon'] (Python Console)
+        # parse with `directives.body.CodeBlock` (returns literal-block
+        # with class "code" and syntax highlight markup).
         self.parent += nodes.doctest_block(data, data)
         return [], next_state, []
 
@@ -1747,9 +1764,11 @@ class Body(RSTState):
                                     line=startline+offset)
         return [error]
 
-    def build_table(self, tabledata, tableline, stub_columns=0):
+    def build_table(self, tabledata, tableline, stub_columns=0, widths=None):
         colwidths, headrows, bodyrows = tabledata
         table = nodes.table()
+        if widths:
+            table['classes'] += ['colwidths-%s' % widths]
         tgroup = nodes.tgroup(cols=len(colwidths))
         table += tgroup
         for colwidth in colwidths:

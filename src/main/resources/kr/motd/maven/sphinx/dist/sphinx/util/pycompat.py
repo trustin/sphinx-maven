@@ -15,10 +15,11 @@ import codecs
 import warnings
 
 from six import class_types
+from six import PY3, text_type, exec_
 from six.moves import zip_longest
 from itertools import product
 
-from six import PY3, text_type, exec_
+from sphinx.deprecation import RemovedInSphinx16Warning
 
 NoneType = type(None)
 
@@ -55,7 +56,7 @@ if PY3:
         return text_type(tree)
     from html import escape as htmlescape  # noqa: >= Python 3.2
 
-    class UnicodeMixin:
+    class UnicodeMixin(object):
         """Mixin class to handle defining the proper __str__/__unicode__
         methods in Python 2 or 3."""
 
@@ -105,11 +106,9 @@ def execfile_(filepath, _globals, open=open):
     from sphinx.util.osutil import fs_encoding
     # get config source -- 'b' is a no-op under 2.x, while 'U' is
     # ignored under 3.x (but 3.x compile() accepts \r\n newlines)
-    f = open(filepath, 'rbU')
-    try:
+    mode = 'rb' if PY3 else 'rbU'
+    with open(filepath, mode) as f:
         source = f.read()
-    finally:
-        f.close()
 
     # py26 accept only LF eol instead of CRLF
     if sys.version_info[:2] == (2, 6):
@@ -141,11 +140,12 @@ class _DeprecationWrapper(object):
     def __getattr__(self, attr):
         if attr in self._deprecated:
             warnings.warn("sphinx.util.pycompat.%s is deprecated and will be "
-                          "removed in Sphinx 1.4, please use the standard "
+                          "removed in Sphinx 1.6, please use the standard "
                           "library version instead." % attr,
-                          DeprecationWarning, stacklevel=2)
+                          RemovedInSphinx16Warning, stacklevel=2)
             return self._deprecated[attr]
         return getattr(self._mod, attr)
+
 
 sys.modules[__name__] = _DeprecationWrapper(sys.modules[__name__], dict(
     zip_longest = zip_longest,

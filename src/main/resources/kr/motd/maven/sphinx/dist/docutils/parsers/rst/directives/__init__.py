@@ -1,4 +1,4 @@
-# $Id: __init__.py 7621 2013-03-04 13:20:49Z milde $
+# $Id: __init__.py 7785 2015-02-08 23:51:45Z grubert $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -402,3 +402,15 @@ def choice(argument, values):
 def format_values(values):
     return '%s, or "%s"' % (', '.join(['"%s"' % s for s in values[:-1]]),
                             values[-1])
+
+def value_or(values, other):
+    """
+    The argument can be any of `values` or `argument_type`.
+    """
+    def auto_or_other(argument):
+        if argument in values:
+            return argument
+        else:
+            return other(argument)
+    return auto_or_other
+

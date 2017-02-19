@@ -58,6 +58,7 @@ import re
 import sys
 import inspect
 import posixpath
+from six import string_types
 from types import ModuleType
 
 from six import text_type
@@ -67,6 +68,7 @@ from docutils import nodes
 
 import sphinx
 from sphinx import addnodes
+from sphinx.util import import_object, rst
 from sphinx.util.compat import Directive
 from sphinx.pycode import ModuleAnalyzer, PycodeError
 from sphinx.ext.autodoc import Options
@@ -98,7 +100,7 @@ def process_autosummary_toc(app, doctree):
             if not isinstance(subnode, nodes.section):
                 continue
             if subnode not in crawled:
-                crawl_toc(subnode, depth+1)
+                crawl_toc(subnode, depth + 1)
     crawl_toc(doctree)
 
 
@@ -135,7 +137,7 @@ def autosummary_table_visit_html(self, node):
 
 # -- autodoc integration -------------------------------------------------------
 
-class FakeDirective:
+class FakeDirective(object):
     env = {}
     genopt = Options()
 
@@ -264,7 +266,7 @@ class Autosummary(Directive):
             if not isinstance(obj, ModuleType):
                 # give explicitly separated module name, so that members
                 # of inner classes can be documented
-                full_name = modname + '::' + full_name[len(modname)+1:]
+                full_name = modname + '::' + full_name[len(modname) + 1:]
             # NB. using full_name here is important, since Documenters
             #     handle module prefixes slightly differently
             documenter = get_documenter(obj, parent)(self, full_name)
@@ -300,7 +302,6 @@ class Autosummary(Directive):
             else:
                 max_chars = max(10, max_item_chars - len(display_name))
                 sig = mangle_signature(sig, max_chars=max_chars)
-                sig = sig.replace('*', r'\*')
 
             # -- Grab the summary
 
@@ -367,7 +368,7 @@ class Autosummary(Directive):
         for name, sig, summary, real_name in items:
             qualifier = 'obj'
             if 'nosignatures' not in self.options:
-                col1 = ':%s:`%s <%s>`\ %s' % (qualifier, name, real_name, sig)
+                col1 = ':%s:`%s <%s>`\ %s' % (qualifier, name, real_name, rst.escape(sig))
             else:
                 col1 = ':%s:`%s <%s>`' % (qualifier, name, real_name)
             col2 = summary
@@ -401,13 +402,13 @@ def mangle_signature(sig, max_chars=30):
         s = m.group(1)[:-2]
 
     # Produce a more compact signature
-    sig = limited_join(", ", args, max_chars=max_chars-2)
+    sig = limited_join(", ", args, max_chars=max_chars - 2)
     if opts:
         if not sig:
-            sig = "[%s]" % limited_join(", ", opts, max_chars=max_chars-4)
+            sig = "[%s]" % limited_join(", ", opts, max_chars=max_chars - 4)
         elif len(sig) < max_chars - 4 - 2 - 3:
             sig += "[, %s]" % limited_join(", ", opts,
-                                           max_chars=max_chars-len(sig)-4-2)
+                                           max_chars=max_chars - len(sig) - 4 - 2)
 
     return u"(%s)" % sig
 
@@ -495,7 +496,7 @@ def _import_by_name(name):
         # ... then as MODNAME, MODNAME.OBJ1, MODNAME.OBJ1.OBJ2, ...
         last_j = 0
         modname = None
-        for j in reversed(range(1, len(name_parts)+1)):
+        for j in reversed(range(1, len(name_parts) + 1)):
             last_j = j
             modname = '.'.join(name_parts[:j])
             try:
@@ -542,6 +543,22 @@ def autolink_role(typ, rawtext, etext, lineno, inliner,
     return r
 
 
+def get_rst_suffix(app):
+    def get_supported_format(suffix):
+        parser_class = app.config.source_parsers.get(suffix)
+        if parser_class is None:
+            return ('restructuredtext',)
+        if isinstance(parser_class, string_types):
+            parser_class = import_object(parser_class, 'source parser')
+        return parser_class.supported
+
+    for suffix in app.config.source_suffix:
+        if 'restructuredtext' in get_supported_format(suffix):
+            return suffix
+
+    return None
+
+
 def process_generate_options(app):
     genfiles = app.config.autosummary_generate
 
@@ -555,12 +572,18 @@ def process_generate_options(app):
 
     from sphinx.ext.autosummary.generate import generate_autosummary_docs
 
-    ext = app.config.source_suffix[0]
-    genfiles = [genfile + (not genfile.endswith(ext) and ext or '')
+    ext = app.config.source_suffix
+    genfiles = [genfile + (not genfile.endswith(tuple(ext)) and ext[0] or '')
                 for genfile in genfiles]
 
+    suffix = get_rst_suffix(app)
+    if suffix is None:
+        app.warn('autosummary generats .rst files internally. '
+                 'But your source_suffix does not contain .rst. Skipped.')
+        return
+
     generate_autosummary_docs(genfiles, builder=app.builder,
-                              warn=app.warn, info=app.info, suffix=ext,
+                              warn=app.warn, info=app.info, suffix=suffix,
                               base_path=app.srcdir)
 
 

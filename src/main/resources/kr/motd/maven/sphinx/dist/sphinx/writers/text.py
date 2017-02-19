@@ -20,6 +20,7 @@ from docutils import nodes, writers
 from docutils.utils import column_width
 
 from sphinx import addnodes
+from sphinx.deprecation import RemovedInSphinx16Warning
 from sphinx.locale import admonitionlabels, _
 
 
@@ -89,7 +90,7 @@ class TextWrapper(textwrap.TextWrapper):
         for i, c in enumerate(word):
             total += column_width(c)
             if total > space_left:
-                return word[:i-1], word[i-1:]
+                return word[:i - 1], word[i - 1:]
         return word, ''
 
     def _split(self, text):
@@ -193,7 +194,7 @@ class TextTranslator(nodes.NodeVisitor):
             if not toformat:
                 return
             if wrap:
-                res = my_wrap(''.join(toformat), width=MAXWIDTH-maxindent)
+                res = my_wrap(''.join(toformat), width=MAXWIDTH - maxindent)
             else:
                 res = ''.join(toformat).splitlines()
             if end:
@@ -224,7 +225,7 @@ class TextTranslator(nodes.NodeVisitor):
 
     def depart_document(self, node):
         self.end_state()
-        self.body = self.nl.join(line and (' '*indent + line)
+        self.body = self.nl.join(line and (' ' * indent + line)
                                  for indent, lines in self.states[0]
                                  for line in lines)
         # XXX header/footer?
@@ -270,7 +271,7 @@ class TextTranslator(nodes.NodeVisitor):
 
     def visit_title(self, node):
         if isinstance(node.parent, nodes.Admonition):
-            self.add_text(node.astext()+': ')
+            self.add_text(node.astext() + ': ')
             raise nodes.SkipNode
         self.new_state(0)
 
@@ -281,8 +282,11 @@ class TextTranslator(nodes.NodeVisitor):
             char = '^'
         text = ''.join(x[1] for x in self.states.pop() if x[0] == -1)
         self.stateindent.pop()
-        self.states[-1].append(
-            (0, ['', text, '%s' % (char * column_width(text)), '']))
+        title = ['', text, '%s' % (char * column_width(text)), '']
+        if len(self.states) == 2 and len(self.states[-1]) == 0:
+            # remove an empty line before title if it is first section title in the document
+            title.pop(0)
+        self.states[-1].append((0, title))
 
     def visit_subtitle(self, node):
         pass
@@ -308,6 +312,12 @@ class TextTranslator(nodes.NodeVisitor):
     def depart_desc_signature(self, node):
         # XXX: wrap signatures in a way that makes sense
         self.end_state(wrap=False, end=None)
+
+    def visit_desc_signature_line(self, node):
+        pass
+
+    def depart_desc_signature_line(self, node):
+        self.add_text('\n')
 
     def visit_desc_name(self, node):
         pass
@@ -391,7 +401,7 @@ class TextTranslator(nodes.NodeVisitor):
                 self.add_text(production['tokenname'].ljust(maxlen) + ' ::=')
                 lastname = production['tokenname']
             elif lastname is not None:
-                self.add_text('%s    ' % (' '*len(lastname)))
+                self.add_text('%s    ' % (' ' * len(lastname)))
             self.add_text(production.astext() + self.nl)
         self.end_state(wrap=False)
         raise nodes.SkipNode
@@ -542,7 +552,7 @@ class TextTranslator(nodes.NodeVisitor):
         def writesep(char='-'):
             out = ['+']
             for width in realwidths:
-                out.append(char * (width+2))
+                out.append(char * (width + 2))
                 out.append('+')
             self.add_text(''.join(out) + self.nl)
 
@@ -642,8 +652,10 @@ class TextTranslator(nodes.NodeVisitor):
             self.end_state(end=None)
 
     def visit_termsep(self, node):
-        warnings.warn('sphinx.addnodes.termsep will be removed at Sphinx-1.5',
-                      DeprecationWarning)
+        warnings.warn('sphinx.addnodes.termsep will be removed at Sphinx-1.6. '
+                      'This warning is displayed because some Sphinx extension '
+                      'uses sphinx.addnodes.termsep. Please report it to '
+                      'author of the extension.', RemovedInSphinx16Warning)
         self.add_text(', ')
         raise nodes.SkipNode
 

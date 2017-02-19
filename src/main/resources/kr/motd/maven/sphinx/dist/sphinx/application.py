@@ -32,9 +32,8 @@ from sphinx.roles import XRefRole
 from sphinx.config import Config
 from sphinx.errors import SphinxError, SphinxWarning, ExtensionError, \
     VersionRequirementError, ConfigError
-from sphinx.domains import ObjType, BUILTIN_DOMAINS
+from sphinx.domains import ObjType
 from sphinx.domains.std import GenericObject, Target, StandardDomain
-from sphinx.builders import BUILTIN_BUILDERS
 from sphinx.environment import BuildEnvironment
 from sphinx.io import SphinxStandaloneReader
 from sphinx.util import pycompat  # noqa: F401
@@ -42,12 +41,9 @@ from sphinx.util import import_object
 from sphinx.util.tags import Tags
 from sphinx.util.osutil import ENOENT
 from sphinx.util.logging import is_suppressed_warning
-from sphinx.util.console import bold, lightgray, darkgray, darkgreen, \
+from sphinx.util.console import bold, lightgray, darkgray, darkred, darkgreen, \
     term_width_line
 from sphinx.util.i18n import find_catalog_source_files
-
-if hasattr(sys, 'intern'):
-    intern = sys.intern
 
 # List of all known core events. Maps name to arguments description.
 events = {
@@ -65,6 +61,36 @@ events = {
     'html-page-context': 'pagename, context, doctree or None',
     'build-finished': 'exception',
 }
+builtin_extensions = (
+    'sphinx.builders.applehelp',
+    'sphinx.builders.changes',
+    'sphinx.builders.epub',
+    'sphinx.builders.epub3',
+    'sphinx.builders.devhelp',
+    'sphinx.builders.dummy',
+    'sphinx.builders.gettext',
+    'sphinx.builders.html',
+    'sphinx.builders.htmlhelp',
+    'sphinx.builders.latex',
+    'sphinx.builders.linkcheck',
+    'sphinx.builders.manpage',
+    'sphinx.builders.qthelp',
+    'sphinx.builders.texinfo',
+    'sphinx.builders.text',
+    'sphinx.builders.websupport',
+    'sphinx.builders.xml',
+    'sphinx.domains.c',
+    'sphinx.domains.cpp',
+    'sphinx.domains.javascript',
+    'sphinx.domains.python',
+    'sphinx.domains.rst',
+    'sphinx.domains.std',
+    'sphinx.directives',
+    'sphinx.directives.code',
+    'sphinx.directives.other',
+    'sphinx.directives.patches',
+    'sphinx.roles',
+)
 
 CONFIG_FILENAME = 'conf.py'
 ENV_PICKLE_FILENAME = 'environment.pickle'
@@ -87,9 +113,9 @@ class Sphinx(object):
         self._additional_source_parsers = {}
         self._listeners = {}
         self._setting_up_extension = ['?']
-        self.domains = BUILTIN_DOMAINS.copy()
+        self.domains = {}
         self.buildername = buildername
-        self.builderclasses = BUILTIN_BUILDERS.copy()
+        self.builderclasses = {}
         self.builder = None
         self.env = None
         self.enumerable_nodes = {}
@@ -147,10 +173,20 @@ class Sphinx(object):
                 'This project needs at least Sphinx v%s and therefore cannot '
                 'be built with this version.' % self.config.needs_sphinx)
 
+        # force preload html_translator_class
+        if self.config.html_translator_class:
+            translator_class = self.import_object(self.config.html_translator_class,
+                                                  'html_translator_class setting')
+            self.set_translator('html', translator_class)
+
         # set confdir to srcdir if -C given (!= no confdir); a few pieces
         # of code expect a confdir to be set
         if self.confdir is None:
             self.confdir = self.srcdir
+
+        # load all built-in extension modules
+        for extension in builtin_extensions:
+            self.setup_extension(extension)
 
         # extension loading support for alabaster theme
         # self.config.html_theme is not set from conf.py at here
@@ -192,6 +228,10 @@ class Sphinx(object):
                         'version %s and therefore cannot be built with the '
                         'loaded version (%s).' % (extname, needs_ver, has_ver))
 
+        # check primary_domain if requested
+        if self.config.primary_domain and self.config.primary_domain not in self.domains:
+            self.warn('primary_domain %r not found, ignored.' % self.config.primary_domain)
+
         # set up translation infrastructure
         self._init_i18n()
         # check all configuration values for permissible types
@@ -218,7 +258,7 @@ class Sphinx(object):
             for catinfo in find_catalog_source_files(
                     user_locale_dirs, self.config.language, domains=['sphinx'],
                     charset=self.config.source_encoding):
-                catinfo.write_mo(self.config.language)
+                catinfo.write_mo(self.config.language, self.warn)
             locale_dirs = [None, path.join(package_dir, 'locale')] + user_locale_dirs
         else:
             locale_dirs = []
@@ -241,7 +281,7 @@ class Sphinx(object):
         if freshenv:
             self.env = BuildEnvironment(self.srcdir, self.doctreedir, self.config)
             self.env.set_warnfunc(self.warn)
-            self.env.find_files(self.config)
+            self.env.find_files(self.config, self.buildername)
             for domain in self.domains.keys():
                 self.env.domains[domain] = self.domains[domain](self.env)
         else:
@@ -250,6 +290,7 @@ class Sphinx(object):
                 self.env = BuildEnvironment.frompickle(
                     self.srcdir, self.config, path.join(self.doctreedir, ENV_PICKLE_FILENAME))
                 self.env.set_warnfunc(self.warn)
+                self.env.init_managers()
                 self.env.domains = {}
                 for domain in self.domains.keys():
                     # this can raise if the data version doesn't fit
@@ -260,7 +301,7 @@ class Sphinx(object):
                     self.info('not yet created')
                 else:
                     self.info('failed: %s' % err)
-                return self._init_env(freshenv=True)
+                self._init_env(freshenv=True)
 
     def _init_builder(self, buildername):
         if buildername is None:
@@ -270,11 +311,6 @@ class Sphinx(object):
             raise SphinxError('Builder name %s not registered' % buildername)
 
         builderclass = self.builderclasses[buildername]
-        if isinstance(builderclass, tuple):
-            # builtin builder
-            mod, cls = builderclass
-            builderclass = getattr(
-                __import__('sphinx.builders.' + mod, None, None, [cls]), cls)
         self.builder = builderclass(self)
         self.emit('builder-inited')
 
@@ -322,14 +358,17 @@ class Sphinx(object):
             wfile.write(message)
         except UnicodeEncodeError:
             encoding = getattr(wfile, 'encoding', 'ascii') or 'ascii'
-            wfile.write(message.encode(encoding, 'replace'))
+            # wfile.write accept only str, not bytes.So, we encode and replace
+            # non-encodable characters, then decode them.
+            wfile.write(message.encode(encoding, 'replace').decode(encoding))
         if not nonl:
             wfile.write('\n')
         if hasattr(wfile, 'flush'):
             wfile.flush()
         self.messagelog.append(message)
 
-    def warn(self, message, location=None, prefix='WARNING: ', type=None, subtype=None):
+    def warn(self, message, location=None, prefix='WARNING: ',
+             type=None, subtype=None, colorfunc=darkred):
         """Emit a warning.
 
         If *location* is given, it should either be a tuple of (docname, lineno)
@@ -359,7 +398,7 @@ class Sphinx(object):
         if self.warningiserror:
             raise SphinxWarning(warntext)
         self._warncount += 1
-        self._log(warntext, self._warning, True)
+        self._log(colorfunc(warntext), self._warning, True)
 
     def info(self, message='', nonl=False):
         """Emit an informational message.
@@ -426,9 +465,9 @@ class Sphinx(object):
         l = 0
         for item in iterable:
             if l == 0:
-                self.info(bold(summary), nonl=1)
+                self.info(bold(summary), nonl=True)
                 l = 1
-            self.info(colorfunc(stringify_func(item)) + ' ', nonl=1)
+            self.info(colorfunc(stringify_func(item)) + ' ', nonl=True)
             yield item
         if l == 1:
             self.info()
@@ -445,13 +484,13 @@ class Sphinx(object):
         summary = bold(summary)
         for item in iterable:
             l += 1
-            s = '%s[%3d%%] %s' % (summary, 100*l/length,
+            s = '%s[%3d%%] %s' % (summary, 100 * l / length,
                                   colorfunc(stringify_func(item)))
             if self.verbosity:
                 s += '\n'
             else:
                 s = term_width_line(s)
-            self.info(s, nonl=1)
+            self.info(s, nonl=True)
             yield item
         if l > 0:
             self.info()
@@ -517,7 +556,6 @@ class Sphinx(object):
     # event interface
 
     def _validate_event(self, event):
-        event = intern(event)
         if event not in self._events:
             raise ExtensionError('Unknown event name: %s' % event)
 
@@ -565,13 +603,9 @@ class Sphinx(object):
             raise ExtensionError('Builder class %s has no "name" attribute'
                                  % builder)
         if builder.name in self.builderclasses:
-            if isinstance(self.builderclasses[builder.name], tuple):
-                raise ExtensionError('Builder %r is a builtin builder' %
-                                     builder.name)
-            else:
-                raise ExtensionError(
-                    'Builder %r already exists (in module %s)' % (
-                        builder.name, self.builderclasses[builder.name].__module__))
+            raise ExtensionError(
+                'Builder %r already exists (in module %s)' % (
+                    builder.name, self.builderclasses[builder.name].__module__))
         self.builderclasses[builder.name] = builder
 
     def add_config_value(self, name, default, rebuild, types=()):
@@ -626,9 +660,9 @@ class Sphinx(object):
             else:
                 # ignore invalid keys for compatibility
                 continue
-            setattr(translator, 'visit_'+node.__name__, visit)
+            setattr(translator, 'visit_' + node.__name__, visit)
             if depart:
-                setattr(translator, 'depart_'+node.__name__, depart)
+                setattr(translator, 'depart_' + node.__name__, depart)
 
     def add_enumerable_node(self, node, figtype, title_getter=None, **kwds):
         self.enumerable_nodes[node] = (figtype, title_getter)
@@ -772,8 +806,8 @@ class Sphinx(object):
 
     def add_latex_package(self, packagename, options=None):
         self.debug('[app] adding latex package: %r', packagename)
-        from sphinx.builders.latex import LaTeXBuilder
-        LaTeXBuilder.usepackages.append((packagename, options))
+        if hasattr(self.builder, 'usepackages'):  # only for LaTeX builder
+            self.builder.usepackages.append((packagename, options))
 
     def add_lexer(self, alias, lexer):
         self.debug('[app] adding lexer: %r', (alias, lexer))
@@ -800,7 +834,7 @@ class Sphinx(object):
         languages[cls.lang] = cls
 
     def add_source_parser(self, suffix, parser):
-        self.debug('[app] adding search source_parser: %r, %r', (suffix, parser))
+        self.debug('[app] adding search source_parser: %r, %r', suffix, parser)
         if suffix in self._additional_source_parsers:
             self.warn('while setting up extension %s: source_parser for %r is '
                       'already registered, it will be overridden' %

@@ -76,7 +76,7 @@
     <dependency>
       <groupId>net.sourceforge.plantuml</groupId>
       <artifactId>plantuml</artifactId>
-      <version>8037</version>
+      <version>8056</version>
     </dependency>
 
     <!-- Maven plugin related -->

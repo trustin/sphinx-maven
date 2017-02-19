@@ -46,15 +46,13 @@ class TocTree(Directive):
         'includehidden': directives.flag,
         'numbered': int_or_nothing,
         'titlesonly': directives.flag,
+        'reversed': directives.flag,
     }
 
     def run(self):
         env = self.state.document.settings.env
         suffixes = env.config.source_suffix
         glob = 'glob' in self.options
-        caption = self.options.get('caption')
-        if caption:
-            self.options.setdefault('name', nodes.fully_normalize_name(caption))
 
         ret = []
         # (title, ref) pairs, where ref may be a document, or an external link,
@@ -109,11 +107,13 @@ class TocTree(Directive):
         subnode = addnodes.toctree()
         subnode['parent'] = env.docname
         # entries contains all entries (self references, external links etc.)
+        if 'reversed' in self.options:
+            entries.reverse()
         subnode['entries'] = entries
         # includefiles only entries that are documents
         subnode['includefiles'] = includefiles
         subnode['maxdepth'] = self.options.get('maxdepth', -1)
-        subnode['caption'] = caption
+        subnode['caption'] = self.options.get('caption')
         subnode['glob'] = glob
         subnode['hidden'] = 'hidden' in self.options
         subnode['includehidden'] = 'includehidden' in self.options
@@ -204,7 +204,7 @@ class VersionChange(Directive):
         text = versionlabels[self.name] % self.arguments[0]
         if len(self.arguments) == 2:
             inodes, messages = self.state.inline_text(self.arguments[1],
-                                                      self.lineno+1)
+                                                      self.lineno + 1)
             para = nodes.paragraph(self.arguments[1], '', *inodes, translatable=False)
             set_source_info(self, para)
             node.append(para)
@@ -325,7 +325,7 @@ class HList(Directive):
         index = 0
         newnode = addnodes.hlist()
         for column in range(ncolumns):
-            endindex = index + (column < nmore and (npercol+1) or npercol)
+            endindex = index + (column < nmore and (npercol + 1) or npercol)
             col = addnodes.hlistcol()
             col += nodes.bullet_list()
             col[0] += fulllist.children[index:endindex]
@@ -409,24 +409,31 @@ class Include(BaseInclude):
         return BaseInclude.run(self)
 
 
-directives.register_directive('toctree', TocTree)
-directives.register_directive('sectionauthor', Author)
-directives.register_directive('moduleauthor', Author)
-directives.register_directive('codeauthor', Author)
-directives.register_directive('index', Index)
-directives.register_directive('deprecated', VersionChange)
-directives.register_directive('versionadded', VersionChange)
-directives.register_directive('versionchanged', VersionChange)
-directives.register_directive('seealso', SeeAlso)
-directives.register_directive('tabularcolumns', TabularColumns)
-directives.register_directive('centered', Centered)
-directives.register_directive('acks', Acks)
-directives.register_directive('hlist', HList)
-directives.register_directive('only', Only)
-directives.register_directive('include', Include)
+def setup(app):
+    directives.register_directive('toctree', TocTree)
+    directives.register_directive('sectionauthor', Author)
+    directives.register_directive('moduleauthor', Author)
+    directives.register_directive('codeauthor', Author)
+    directives.register_directive('index', Index)
+    directives.register_directive('deprecated', VersionChange)
+    directives.register_directive('versionadded', VersionChange)
+    directives.register_directive('versionchanged', VersionChange)
+    directives.register_directive('seealso', SeeAlso)
+    directives.register_directive('tabularcolumns', TabularColumns)
+    directives.register_directive('centered', Centered)
+    directives.register_directive('acks', Acks)
+    directives.register_directive('hlist', HList)
+    directives.register_directive('only', Only)
+    directives.register_directive('include', Include)
 
-# register the standard rst class directive under a different name
-# only for backwards compatibility now
-directives.register_directive('cssclass', Class)
-# new standard name when default-domain with "class" is in effect
-directives.register_directive('rst-class', Class)
+    # register the standard rst class directive under a different name
+    # only for backwards compatibility now
+    directives.register_directive('cssclass', Class)
+    # new standard name when default-domain with "class" is in effect
+    directives.register_directive('rst-class', Class)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

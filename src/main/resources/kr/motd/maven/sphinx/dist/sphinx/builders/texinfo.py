@@ -22,7 +22,7 @@ from sphinx.locale import _
 from sphinx.builders import Builder
 from sphinx.environment import NoUri
 from sphinx.util.nodes import inline_all_toctrees
-from sphinx.util.osutil import SEP, copyfile
+from sphinx.util.osutil import SEP, copyfile, make_filename
 from sphinx.util.console import bold, darkgreen
 from sphinx.writers.texinfo import TexinfoWriter
 
@@ -122,7 +122,7 @@ class TexinfoBuilder(Builder):
                           'document %s' % docname)
                 continue
             self.document_data.append(entry)
-            if docname.endswith(SEP+'index'):
+            if docname.endswith(SEP + 'index'):
                 docname = docname[:-5]
             self.titles.append((docname, entry[2]))
 
@@ -210,7 +210,7 @@ class TexinfoBuilder(Builder):
         if self.images:
             self.info(bold('copying images...'), nonl=1)
             for src, dest in iteritems(self.images):
-                self.info(' '+src, nonl=1)
+                self.info(' ' + src, nonl=1)
                 copyfile(path.join(self.srcdir, src),
                          path.join(self.outdir, dest))
             self.info()
@@ -220,11 +220,31 @@ class TexinfoBuilder(Builder):
         fn = path.join(self.outdir, 'Makefile')
         self.info(fn, nonl=1)
         try:
-            mkfile = open(fn, 'w')
-            try:
+            with open(fn, 'w') as mkfile:
                 mkfile.write(TEXINFO_MAKEFILE)
-            finally:
-                mkfile.close()
         except (IOError, OSError) as err:
             self.warn("error writing file %s: %s" % (fn, err))
         self.info(' done')
+
+
+def setup(app):
+    app.add_builder(TexinfoBuilder)
+
+    app.add_config_value('texinfo_documents',
+                         lambda self: [(self.master_doc, make_filename(self.project).lower(),
+                                        self.project, '', make_filename(self.project),
+                                        'The %s reference manual.' %
+                                        make_filename(self.project),
+                                        'Python')],
+                         None)
+    app.add_config_value('texinfo_appendices', [], None)
+    app.add_config_value('texinfo_elements', {}, None)
+    app.add_config_value('texinfo_domain_indices', True, None, [list])
+    app.add_config_value('texinfo_show_urls', 'footnote', None)
+    app.add_config_value('texinfo_no_detailmenu', False, None)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

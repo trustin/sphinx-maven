@@ -8,6 +8,7 @@
     :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+from __future__ import absolute_import
 
 import re
 
@@ -46,6 +47,8 @@ def apply_source_workaround(node):
         node.source = definition_list_item.source
         node.line = definition_list_item.line - 1
         node.rawsource = node.astext()  # set 'classifier1' (or 'classifier2')
+    if isinstance(node, nodes.image) and node.source is None:
+        node.source, node.line = node.parent.source, node.parent.line
     if isinstance(node, nodes.term):
         # strip classifier from rawsource of term
         for classifier in reversed(node.parent.traverse(nodes.classifier)):
@@ -59,16 +62,12 @@ def apply_source_workaround(node):
     if node.source and node.rawsource:
         return
 
-    # workaround: docutils-0.10.0 or older's nodes.caption for nodes.figure
-    # and nodes.title for nodes.admonition doesn't have source, line.
-    # this issue was filed to Docutils tracker:
-    # sf.net/tracker/?func=detail&aid=3599485&group_id=38414&atid=422032
-    # sourceforge.net/p/docutils/patches/108/
+    # workaround: some docutils nodes doesn't have source, line.
     if (isinstance(node, (
-            nodes.caption,
-            nodes.title,
-            nodes.rubric,
-            nodes.line,
+            nodes.rubric,  # #1305 rubric directive
+            nodes.line,  # #1477 line node
+            nodes.image,  # #3093 image directive in substitution
+            nodes.field_name,  # #3335 field list syntax
     ))):
         node.source = find_source_node(node)
         node.line = 0  # need fix docutils to get `node.line`
@@ -85,7 +84,18 @@ IGNORED_NODES = (
 )
 
 
+def is_pending_meta(node):
+    if (isinstance(node, nodes.pending) and
+       isinstance(node.details.get('nodes', [None])[0], addnodes.meta)):
+        return True
+    else:
+        return False
+
+
 def is_translatable(node):
+    if isinstance(node, addnodes.translatable):
+        return True
+
     if isinstance(node, nodes.TextElement):
         if not node.source:
             return False  # built-in message
@@ -103,6 +113,11 @@ def is_translatable(node):
     if isinstance(node, nodes.image) and node.get('translatable'):
         return True
 
+    if isinstance(node, addnodes.meta):
+        return True
+    if is_pending_meta(node):
+        return True
+
     return False
 
 
@@ -114,11 +129,18 @@ LITERAL_TYPE_NODES = (
 IMAGE_TYPE_NODES = (
     nodes.image,
 )
+META_TYPE_NODES = (
+    addnodes.meta,
+)
 
 
 def extract_messages(doctree):
     """Extract translatable messages from a document tree."""
     for node in doctree.traverse(is_translatable):
+        if isinstance(node, addnodes.translatable):
+            for msg in node.extract_original_messages():
+                yield node, msg
+            continue
         if isinstance(node, LITERAL_TYPE_NODES):
             msg = node.rawsource
             if not msg:
@@ -127,6 +149,10 @@ def extract_messages(doctree):
             msg = '.. image:: %s' % node['uri']
             if node.get('alt'):
                 msg += '\n   :alt: %s' % node['alt']
+        elif isinstance(node, META_TYPE_NODES):
+            msg = node.rawcontent
+        elif is_pending_meta(node):
+            msg = node.details['nodes'][0].rawcontent
         else:
             msg = node.rawsource.replace('\n', ' ').strip()
 
@@ -185,6 +211,8 @@ def clean_astext(node):
     node = node.deepcopy()
     for img in node.traverse(nodes.image):
         img['alt'] = ''
+    for raw in node.traverse(nodes.raw):
+        raw.parent.remove(raw)
     return node.astext()
 
 
@@ -210,15 +238,15 @@ def process_index_entry(entry, targetid):
         main = 'main'
         entry = entry[1:].lstrip()
     for type in pairindextypes:
-        if entry.startswith(type+':'):
-            value = entry[len(type)+1:].strip()
+        if entry.startswith(type + ':'):
+            value = entry[len(type) + 1:].strip()
             value = pairindextypes[type] + '; ' + value
             indexentries.append(('pair', value, targetid, main, None))
             break
     else:
         for type in indextypes:
-            if entry.startswith(type+':'):
-                value = entry[len(type)+1:].strip()
+            if entry.startswith(type + ':'):
+                value = entry[len(type) + 1:].strip()
                 if type == 'double':
                     type = 'pair'
                 indexentries.append((type, value, targetid, main, None))
@@ -293,6 +321,27 @@ def set_role_source_info(inliner, lineno, node):
     node.source, node.line = inliner.reporter.get_source_and_line(lineno)
 
 
+def process_only_nodes(doctree, tags, warn_node=None):
+    # A comment on the comment() nodes being inserted: replacing by [] would
+    # result in a "Losing ids" exception if there is a target node before
+    # the only node, so we make sure docutils can transfer the id to
+    # something, even if it's just a comment and will lose the id anyway...
+    for node in doctree.traverse(addnodes.only):
+        try:
+            ret = tags.eval_condition(node['expr'])
+        except Exception as err:
+            if warn_node is None:
+                raise err
+            warn_node('exception while evaluating only '
+                      'directive expression: %s' % err, node)
+            node.replace_self(node.children or nodes.comment())
+        else:
+            if ret:
+                node.replace_self(node.children or nodes.comment())
+            else:
+                node.replace_self(nodes.comment())
+
+
 # monkey-patch Element.copy to copy the rawsource and line
 
 def _new_copy(self):
@@ -301,5 +350,6 @@ def _new_copy(self):
         newnode.source = self.source
         newnode.line = self.line
     return newnode
+
 
 nodes.Element.copy = _new_copy

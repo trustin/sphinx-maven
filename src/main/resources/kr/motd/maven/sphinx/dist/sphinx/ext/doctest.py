@@ -214,8 +214,7 @@ class DocTestBuilder(Builder):
 
     def init(self):
         # default options
-        self.opt = doctest.DONT_ACCEPT_TRUE_FOR_1 | doctest.ELLIPSIS | \
-            doctest.IGNORE_EXCEPTION_DETAIL
+        self.opt = self.config.doctest_default_flags
 
         # HACK HACK HACK
         # doctest compiles its snippets with type 'single'. That is nice
@@ -242,7 +241,7 @@ class DocTestBuilder(Builder):
         self.outfile.write('''\
 Results of doctest builder run on %s
 ==================================%s
-''' % (date, '='*len(date)))
+''' % (date, '=' * len(date)))
 
     def _out(self, text):
         self.info(text, nonl=True)
@@ -349,7 +348,7 @@ Doctest summary
             return
 
         self._out('\nDocument: %s\n----------%s\n' %
-                  (docname, '-'*len(docname)))
+                  (docname, '-' * len(docname)))
         for group in itervalues(groups):
             self.test_group(group, self.env.doc2path(docname, base=None))
         # Separately count results from setup code
@@ -464,4 +463,8 @@ def setup(app):
     app.add_config_value('doctest_test_doctest_blocks', 'default', False)
     app.add_config_value('doctest_global_setup', '', False)
     app.add_config_value('doctest_global_cleanup', '', False)
+    app.add_config_value(
+        'doctest_default_flags',
+        doctest.DONT_ACCEPT_TRUE_FOR_1 | doctest.ELLIPSIS | doctest.IGNORE_EXCEPTION_DETAIL,
+        False)
     return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

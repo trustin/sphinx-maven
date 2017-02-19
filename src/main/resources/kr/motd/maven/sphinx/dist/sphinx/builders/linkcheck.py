@@ -15,11 +15,9 @@ import codecs
 import threading
 from os import path
 
-from six.moves import queue
-from six.moves.urllib.request import build_opener, Request, HTTPRedirectHandler
+from requests.exceptions import HTTPError
+from six.moves import queue, html_parser
 from six.moves.urllib.parse import unquote
-from six.moves.urllib.error import HTTPError
-from six.moves.html_parser import HTMLParser
 from docutils import nodes
 
 # 2015-06-25 barry@python.org.  This exception was deprecated in Python 3.3 and
@@ -33,43 +31,17 @@ except ImportError:
         pass
 
 from sphinx.builders import Builder
-from sphinx.util import encode_uri
+from sphinx.util import encode_uri, requests
 from sphinx.util.console import purple, red, darkgreen, darkgray, \
     darkred, turquoise
-from sphinx.util.pycompat import TextIOWrapper
+from sphinx.util.requests import is_ssl_error
 
 
-class RedirectHandler(HTTPRedirectHandler):
-    """A RedirectHandler that records the redirect code we got."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        new_req = HTTPRedirectHandler.redirect_request(self, req, fp, code,
-                                                       msg, headers, newurl)
-        req.redirect_code = code
-        return new_req
-
-# create an opener that will simulate a browser user-agent
-opener = build_opener(RedirectHandler)
-opener.addheaders = [('User-agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:25.0) '
-                      'Gecko/20100101 Firefox/25.0')]
-
-
-class HeadRequest(Request):
-    """Subclass of urllib2.Request that sends a HEAD request."""
-    def __init__(self, *args, **kwargs):
-        Request.__init__(self, *args, **kwargs)
-        # we do not parse the response in HEAD, so accepting anything is okay
-        self.headers['Accept-encoding'] = '*'
-
-    def get_method(self):
-        return 'HEAD'
-
-
-class AnchorCheckParser(HTMLParser):
+class AnchorCheckParser(html_parser.HTMLParser):
     """Specialized HTML parser that looks for a specific anchor."""
 
     def __init__(self, search_anchor):
-        HTMLParser.__init__(self)
+        html_parser.HTMLParser.__init__(self)
 
         self.search_anchor = search_anchor
         self.found = False
@@ -78,37 +50,27 @@ class AnchorCheckParser(HTMLParser):
         for key, value in attrs:
             if key in ('id', 'name') and value == self.search_anchor:
                 self.found = True
+                break
 
 
-def check_anchor(f, anchor):
-    """Reads HTML data from a filelike object 'f' searching for *anchor*.
+def check_anchor(response, anchor):
+    """Reads HTML data from a response object `response` searching for `anchor`.
     Returns True if anchor was found, False otherwise.
     """
     parser = AnchorCheckParser(anchor)
     try:
-        # Read file in chunks of 8192 bytes. If we find a matching anchor, we
-        # break the loop early in hopes not to have to download the whole thing.
-        chunk = f.read(8192)
-        while chunk and not parser.found:
+        # Read file in chunks. If we find a matching anchor, we break
+        # the loop early in hopes not to have to download the whole thing.
+        for chunk in response.iter_content(chunk_size=4096, decode_unicode=True):
             parser.feed(chunk)
-            chunk = f.read(8192)
+            if parser.found:
+                break
         parser.close()
     except HTMLParseError:
         # HTMLParser is usually pretty good with sloppy HTML, but it tends to
         # choke on EOF. But we're done then anyway.
         pass
     return parser.found
-
-
-def get_content_charset(f):
-    content_type = f.headers.get('content-type')
-    if content_type:
-        params = (p.strip() for p in content_type.split(';')[1:])
-        for param in params:
-            if param.startswith('charset='):
-                return param[8:]
-
-    return None
 
 
 class CheckExternalLinksBuilder(Builder):
@@ -119,6 +81,8 @@ class CheckExternalLinksBuilder(Builder):
 
     def init(self):
         self.to_ignore = [re.compile(x) for x in self.app.config.linkcheck_ignore]
+        self.anchors_ignore = [re.compile(x)
+                               for x in self.app.config.linkcheck_anchors_ignore]
         self.good = set()
         self.broken = {}
         self.redirected = {}
@@ -142,10 +106,16 @@ class CheckExternalLinksBuilder(Builder):
         if self.app.config.linkcheck_timeout:
             kwargs['timeout'] = self.app.config.linkcheck_timeout
 
+        kwargs['allow_redirects'] = True
+
         def check_uri():
             # split off anchor
             if '#' in uri:
                 req_url, anchor = uri.split('#', 1)
+                for rex in self.anchors_ignore:
+                    if rex.match(anchor):
+                        anchor = None
+                        break
             else:
                 req_url = uri
                 anchor = None
@@ -157,54 +127,46 @@ class CheckExternalLinksBuilder(Builder):
                 req_url = encode_uri(req_url)
 
             try:
-                if anchor and self.app.config.linkcheck_anchors and \
-                   not anchor.startswith('!'):
+                if anchor and self.app.config.linkcheck_anchors:
                     # Read the whole document and see if #anchor exists
-                    # (Anchors starting with ! are ignored since they are
-                    # commonly used for dynamic pages)
-                    req = Request(req_url)
-                    f = opener.open(req, **kwargs)
-                    encoding = 'utf-8'
-                    if hasattr(f.headers, 'get_content_charset'):
-                        encoding = f.headers.get_content_charset() or encoding
-                    else:
-                        encoding = get_content_charset(f) or encoding
-                    found = check_anchor(TextIOWrapper(f, encoding),
-                                         unquote(anchor))
-                    f.close()
+                    response = requests.get(req_url, stream=True, config=self.app.config,
+                                            **kwargs)
+                    found = check_anchor(response, unquote(anchor))
 
                     if not found:
                         raise Exception("Anchor '%s' not found" % anchor)
                 else:
                     try:
-                        # try a HEAD request, which should be easier on
+                        # try a HEAD request first, which should be easier on
                         # the server and the network
-                        req = HeadRequest(req_url)
-                        f = opener.open(req, **kwargs)
-                        f.close()
+                        response = requests.head(req_url, config=self.app.config, **kwargs)
+                        response.raise_for_status()
                     except HTTPError as err:
-                        if err.code != 405:
-                            raise
-                        # retry with GET if that fails, some servers
-                        # don't like HEAD requests and reply with 405
-                        req = Request(req_url)
-                        f = opener.open(req, **kwargs)
-                        f.close()
+                        # retry with GET request if that fails, some servers
+                        # don't like HEAD requests.
+                        response = requests.get(req_url, stream=True, config=self.app.config,
+                                                **kwargs)
+                        response.raise_for_status()
             except HTTPError as err:
-                if err.code == 401:
+                if err.response.status_code == 401:
                     # We'll take "Unauthorized" as working.
                     return 'working', ' - unauthorized', 0
                 else:
                     return 'broken', str(err), 0
             except Exception as err:
-                return 'broken', str(err), 0
-            if f.url.rstrip('/') == req_url.rstrip('/'):
+                if is_ssl_error(err):
+                    return 'ignored', str(err), 0
+                else:
+                    return 'broken', str(err), 0
+            if response.url.rstrip('/') == req_url.rstrip('/'):
                 return 'working', '', 0
             else:
-                new_url = f.url
+                new_url = response.url
                 if anchor:
                     new_url += '#' + anchor
-                code = getattr(req, 'redirect_code', 0)
+                # history contains any redirects, get last
+                if response.history:
+                    code = response.history[-1].status_code
                 return 'redirected', new_url, code
 
         def check():
@@ -254,16 +216,19 @@ class CheckExternalLinksBuilder(Builder):
         if lineno:
             self.info('(line %4d) ' % lineno, nonl=1)
         if status == 'ignored':
-            self.info(darkgray('-ignored- ') + uri)
+            if info:
+                self.info(darkgray('-ignored- ') + uri + ': ' + info)
+            else:
+                self.info(darkgray('-ignored- ') + uri)
         elif status == 'local':
             self.info(darkgray('-local-   ') + uri)
             self.write_entry('local', docname, lineno, uri)
         elif status == 'working':
-            self.info(darkgreen('ok        ')  + uri + info)
+            self.info(darkgreen('ok        ') + uri + info)
         elif status == 'broken':
             self.write_entry('broken', docname, lineno, uri + ': ' + info)
             if self.app.quiet or self.app.warningiserror:
-                self.warn('broken link: %s' % uri,
+                self.warn('broken link: %s (%s)' % (uri, info),
                           '%s:%s' % (self.env.doc2path(docname), lineno))
             else:
                 self.info(red('broken    ') + uri + red(' - ' + info))
@@ -277,7 +242,7 @@ class CheckExternalLinksBuilder(Builder):
             }[code]
             self.write_entry('redirected ' + text, docname, lineno,
                              uri + ' to ' + info)
-            self.info(color('redirect  ') + uri + color(' - ' + text + ' to '  + info))
+            self.info(color('redirect  ') + uri + color(' - ' + text + ' to ' + info))
 
     def get_target_uri(self, docname, typ=None):
         return ''
@@ -320,3 +285,22 @@ class CheckExternalLinksBuilder(Builder):
     def finish(self):
         for worker in self.workers:
             self.wqueue.put((None, None, None), False)
+
+
+def setup(app):
+    app.add_builder(CheckExternalLinksBuilder)
+
+    app.add_config_value('linkcheck_ignore', [], None)
+    app.add_config_value('linkcheck_retries', 1, None)
+    app.add_config_value('linkcheck_timeout', None, None, [int])
+    app.add_config_value('linkcheck_workers', 5, None)
+    app.add_config_value('linkcheck_anchors', True, None)
+    # Anchors starting with ! are ignored since they are
+    # commonly used for dynamic pages
+    app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)
+
+    return {
+        'version': 'builtin',
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }

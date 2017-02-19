@@ -70,6 +70,8 @@ def process_todos(app, doctree):
     if not hasattr(env, 'todo_all_todos'):
         env.todo_all_todos = []
     for node in doctree.traverse(todo_node):
+        app.emit('todo-defined', node)
+
         try:
             targetnode = node.parent[node.parent.index(node) - 1]
             if not isinstance(targetnode, nodes.target):
@@ -85,6 +87,9 @@ def process_todos(app, doctree):
             'todo': newnode,
             'target': targetnode,
         })
+
+        if env.config.todo_emit_warnings:
+            env.warn_node("TODO entry found: %s" % node[1].astext(), node)
 
 
 class TodoList(Directive):
@@ -133,7 +138,7 @@ def process_todo_nodes(app, doctree, fromdocname):
                     (todo_info['source'], todo_info['lineno'])
                 )
             desc1 = description[:description.find('<<')]
-            desc2 = description[description.find('>>')+2:]
+            desc2 = description[description.find('>>') + 2:]
             para += nodes.Text(desc1, desc1)
 
             # Create a reference
@@ -187,8 +192,10 @@ def depart_todo_node(self, node):
 
 
 def setup(app):
+    app.add_event('todo-defined')
     app.add_config_value('todo_include_todos', False, 'html')
     app.add_config_value('todo_link_only', False, 'html')
+    app.add_config_value('todo_emit_warnings', False, 'html')
 
     app.add_node(todolist)
     app.add_node(todo_node,

@@ -20,6 +20,7 @@ from docutils import nodes
 from docutils.writers.html4css1 import Writer, HTMLTranslator as BaseTranslator
 
 from sphinx import addnodes
+from sphinx.deprecation import RemovedInSphinx16Warning
 from sphinx.locale import admonitionlabels, _
 from sphinx.util.images import get_image_size
 from sphinx.util.smartypants import sphinx_smarty_pants
@@ -104,8 +105,18 @@ class HTMLTranslator(BaseTranslator):
             self.body.append('<!--[%s]-->' % node['ids'][0])
 
     def depart_desc_signature(self, node):
-        self.add_permalink_ref(node, _('Permalink to this definition'))
+        if not node.get('is_multiline'):
+            self.add_permalink_ref(node, _('Permalink to this definition'))
         self.body.append('</dt>\n')
+
+    def visit_desc_signature_line(self, node):
+        pass
+
+    def depart_desc_signature_line(self, node):
+        if node.get('add_permalink'):
+            # the permalink info is on the parent desc_signature node
+            self.add_permalink_ref(node.parent, _('Permalink to this definition'))
+        self.body.append('<br />')
 
     def visit_desc_addname(self, node):
         self.body.append(self.starttag(node, 'code', '', CLASS='descclassname'))
@@ -213,6 +224,8 @@ class HTMLTranslator(BaseTranslator):
             atts['class'] += ' image-reference'
         if 'reftitle' in node:
             atts['title'] = node['reftitle']
+        if 'target' in node:
+            atts['target'] = node['target']
         self.body.append(self.starttag(node, 'a', '', **atts))
 
         if node.get('secnumber'):
@@ -295,11 +308,32 @@ class HTMLTranslator(BaseTranslator):
             format = u'<a class="headerlink" href="#%s" title="%s">%s</a>'
             self.body.append(format % (node['ids'][0], title, self.permalink_text))
 
-    # overwritten to avoid emitting empty <ul></ul>
+    def generate_targets_for_listing(self, node):
+        """Generate hyperlink targets for listings.
+
+        Original visit_bullet_list(), visit_definition_list() and visit_enumerated_list()
+        generates hyperlink targets inside listing tags (<ul>, <ol> and <dl>) if multiple
+        IDs are assigned to listings.  That is invalid DOM structure.
+        (This is a bug of docutils <= 0.12)
+
+        This exports hyperlink targets before listings to make valid DOM structure.
+        """
+        for id in node['ids'][1:]:
+            self.body.append('<span id="%s"></span>' % id)
+            node['ids'].remove(id)
+
+    # overwritten
     def visit_bullet_list(self, node):
         if len(node) == 1 and node[0].tagname == 'toctree':
+            # avoid emitting empty <ul></ul>
             raise nodes.SkipNode
+        self.generate_targets_for_listing(node)
         BaseTranslator.visit_bullet_list(self, node)
+
+    # overwritten
+    def visit_enumerated_list(self, node):
+        self.generate_targets_for_listing(node)
+        BaseTranslator.visit_enumerated_list(self, node)
 
     # overwritten
     def visit_title(self, node):
@@ -308,6 +342,27 @@ class HTMLTranslator(BaseTranslator):
         self.add_fignumber(node.parent)
         if isinstance(node.parent, nodes.table):
             self.body.append('<span class="caption-text">')
+
+    def depart_title(self, node):
+        close_tag = self.context[-1]
+        if (self.permalink_text and self.builder.add_permalinks and
+           node.parent.hasattr('ids') and node.parent['ids']):
+            # add permalink anchor
+            if close_tag.startswith('</h'):
+                self.add_permalink_ref(node.parent, _('Permalink to this headline'))
+            elif close_tag.startswith('</a></h'):
+                self.body.append(u'</a><a class="headerlink" href="#%s" ' %
+                                 node.parent['ids'][0] +
+                                 u'title="%s">%s' % (
+                                     _('Permalink to this headline'),
+                                     self.permalink_text))
+            elif isinstance(node.parent, nodes.table):
+                self.body.append('</span>')
+                self.add_permalink_ref(node.parent, _('Permalink to this table'))
+        elif isinstance(node.parent, nodes.table):
+            self.body.append('</span>')
+
+        BaseTranslator.depart_title(self, node)
 
     # overwritten
     def visit_literal_block(self, node):
@@ -330,8 +385,8 @@ class HTMLTranslator(BaseTranslator):
         else:
             opts = {}
 
-        def warner(msg):
-            self.builder.warn(msg, (self.builder.current_docname, node.line))
+        def warner(msg, **kwargs):
+            self.builder.warn(msg, (self.builder.current_docname, node.line), **kwargs)
         highlighted = self.highlighter.highlight_block(
             node.rawsource, lang, opts=opts, warn=warner, linenos=linenos,
             **highlight_args)
@@ -399,7 +454,7 @@ class HTMLTranslator(BaseTranslator):
                 self.body.append(self.starttag(production, 'strong', ''))
                 self.body.append(lastname + '</strong> ::= ')
             elif lastname is not None:
-                self.body.append('%s     ' % (' '*len(lastname)))
+                self.body.append('%s     ' % (' ' * len(lastname)))
             production.walkabout(self)
             self.body.append('\n')
         self.body.append('</pre>\n')
@@ -446,7 +501,7 @@ class HTMLTranslator(BaseTranslator):
         pass
 
     def visit_download_reference(self, node):
-        if node.hasattr('filename'):
+        if self.builder.download_support and node.hasattr('filename'):
             self.body.append(
                 '<a class="reference download internal" href="%s" download="">' %
                 posixpath.join(self.builder.dlpath, node['filename']))
@@ -466,7 +521,7 @@ class HTMLTranslator(BaseTranslator):
                                          self.builder.images[olduri])
 
         uri = node['uri']
-        if uri.lower().endswith('svg') or uri.lower().endswith('svgz'):
+        if uri.lower().endswith(('svg', 'svgz')):
             atts = {'src': uri}
             if 'width' in node:
                 atts['width'] = node['width']
@@ -497,6 +552,13 @@ class HTMLTranslator(BaseTranslator):
                     if 'height' not in node:
                         node['height'] = str(size[1])
         BaseTranslator.visit_image(self, node)
+
+    # overwritten
+    def depart_image(self, node):
+        if node['uri'].lower().endswith(('svg', 'svgz')):
+            self.body.append(self.context.pop())
+        else:
+            BaseTranslator.depart_image(self, node)
 
     def visit_toctree(self, node):
         # this only happens when formatting a toc from env.tocs -- in this
@@ -552,7 +614,7 @@ class HTMLTranslator(BaseTranslator):
                     self.body.append(token)
                 else:
                     # protect runs of multiple spaces; the last one can wrap
-                    self.body.append('&#160;' * (len(token)-1) + ' ')
+                    self.body.append('&#160;' * (len(token) - 1) + ' ')
         else:
             if self.in_mailto and self.settings.cloak_email_addresses:
                 encoded = self.cloak_email(encoded)
@@ -636,26 +698,11 @@ class HTMLTranslator(BaseTranslator):
     def depart_abbreviation(self, node):
         self.body.append('</abbr>')
 
-    # overwritten (but not changed) to keep pair of visit/depart_term
-    def visit_term(self, node):
-        self.body.append(self.starttag(node, 'dt', ''))
-
-    # overwritten to add '</dt>' in 'depart_term' state.
-    def depart_term(self, node):
-        self.body.append('</dt>\n')
-
-    # overwritten to do not add '</dt>' in 'visit_definition' state.
-    def visit_definition(self, node):
-        self.body.append(self.starttag(node, 'dd', ''))
-        self.set_first_last(node)
-
-    # overwritten (but not changed) to keep pair of visit/depart_definition
-    def depart_definition(self, node):
-        self.body.append('</dd>\n')
-
     def visit_termsep(self, node):
-        warnings.warn('sphinx.addnodes.termsep will be removed at Sphinx-1.5',
-                      DeprecationWarning)
+        warnings.warn('sphinx.addnodes.termsep will be removed at Sphinx-1.6. '
+                      'This warning is displayed because some Sphinx extension '
+                      'uses sphinx.addnodes.termsep. Please report it to '
+                      'author of the extension.', RemovedInSphinx16Warning)
         self.body.append('<br />')
         raise nodes.SkipNode
 
@@ -664,25 +711,6 @@ class HTMLTranslator(BaseTranslator):
 
     def depart_manpage(self, node):
         return self.depart_literal_emphasis(node)
-
-    def depart_title(self, node):
-        close_tag = self.context[-1]
-        if (self.permalink_text and self.builder.add_permalinks and
-           node.parent.hasattr('ids') and node.parent['ids']):
-            # add permalink anchor
-            if close_tag.startswith('</h'):
-                self.add_permalink_ref(node.parent, _('Permalink to this headline'))
-            elif close_tag.startswith('</a></h'):
-                self.body.append(u'</a><a class="headerlink" href="#%s" ' %
-                                 node.parent['ids'][0] +
-                                 u'title="%s">%s' % (
-                                     _('Permalink to this headline'),
-                                     self.permalink_text))
-            elif isinstance(node.parent, nodes.table):
-                self.body.append('</span>')
-                self.add_permalink_ref(node.parent, _('Permalink to this table'))
-
-        BaseTranslator.depart_title(self, node)
 
     # overwritten to add even/odd classes
 

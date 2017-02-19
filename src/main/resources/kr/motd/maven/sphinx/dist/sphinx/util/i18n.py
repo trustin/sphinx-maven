@@ -22,6 +22,7 @@ from babel.messages.pofile import read_po
 from babel.messages.mofile import write_mo
 
 from sphinx.errors import SphinxError
+from sphinx.deprecation import RemovedInSphinx16Warning
 from sphinx.util.osutil import walk
 from sphinx.util import SEP
 
@@ -52,10 +53,19 @@ class CatalogInfo(LocaleFileInfoBase):
             not path.exists(self.mo_path) or
             path.getmtime(self.mo_path) < path.getmtime(self.po_path))
 
-    def write_mo(self, locale):
-        with io.open(self.po_path, 'rt', encoding=self.charset) as po:
-            with io.open(self.mo_path, 'wb') as mo:
-                write_mo(mo, read_po(po, locale))
+    def write_mo(self, locale, warnfunc):
+        with io.open(self.po_path, 'rt', encoding=self.charset) as file_po:
+            try:
+                po = read_po(file_po, locale)
+            except Exception:
+                warnfunc('reading error: %s' % self.po_path)
+                return
+
+        with io.open(self.mo_path, 'wb') as file_mo:
+            try:
+                write_mo(file_mo, po)
+            except Exception:
+                warnfunc('writing error: %s' % self.mo_path)
 
 
 def find_catalog(docname, compaction):
@@ -125,6 +135,7 @@ def find_catalog_source_files(locale_dirs, locale, domains=None, gettext_compact
 
     return catalogs
 
+
 # date_format mappings: ustrftime() to bable.dates.format_datetime()
 date_format_mappings = {
     '%a': 'EEE',     # Weekday as locale’s abbreviated name.
@@ -193,8 +204,8 @@ def format_date(format, date=None, language=None, warn=None):
 
     if re.match('EEE|MMM|dd|DDD|MM|WW|medium|YY', format):
         # consider the format as babel's
-        warnings.warn('LDML format support will be dropped at Sphinx-1.5',
-                      DeprecationWarning)
+        warnings.warn('LDML format support will be dropped at Sphinx-1.6',
+                      RemovedInSphinx16Warning)
 
         return babel_format_date(date, format, locale=language, warn=warn,
                                  formatter=babel.dates.format_datetime)
@@ -229,10 +240,16 @@ def get_image_filename_for_language(filename, env):
         return filename
 
     filename_format = env.config.figure_language_filename
-    root, ext = path.splitext(filename)
+    d = dict()
+    d['root'], d['ext'] = path.splitext(filename)
+    dirname = path.dirname(d['root'])
+    if dirname and not dirname.endswith(path.sep):
+        dirname += path.sep
+    d['path'] = dirname
+    d['basename'] = path.basename(d['root'])
+    d['language'] = env.config.language
     try:
-        return filename_format.format(root=root, ext=ext,
-                                      language=env.config.language)
+        return filename_format.format(**d)
     except KeyError as exc:
         raise SphinxError('Invalid figure_language_filename: %r' % exc)
 
