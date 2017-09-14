@@ -1,0 +1,6 @@
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.br binary
+*.gz binary
+
+/mvnw text eol=lf

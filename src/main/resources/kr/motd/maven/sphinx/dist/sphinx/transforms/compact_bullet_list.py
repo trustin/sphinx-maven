@@ -5,14 +5,14 @@
 
     Docutils transforms used by Sphinx when reading documents.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 from docutils import nodes
-from docutils.transforms import Transform
 
 from sphinx import addnodes
+from sphinx.transforms import SphinxTransform
 
 
 class RefOnlyListChecker(nodes.GenericNodeVisitor):
@@ -23,12 +23,15 @@ class RefOnlyListChecker(nodes.GenericNodeVisitor):
     """
 
     def default_visit(self, node):
+        # type: (nodes.Node) -> None
         raise nodes.NodeFound
 
     def visit_bullet_list(self, node):
+        # type: (nodes.Node) -> None
         pass
 
     def visit_list_item(self, node):
+        # type: (nodes.Node) -> None
         children = []
         for child in node.children:
             if not isinstance(child, nodes.Invisible):
@@ -45,11 +48,12 @@ class RefOnlyListChecker(nodes.GenericNodeVisitor):
         raise nodes.SkipChildren
 
     def invisible_visit(self, node):
+        # type: (nodes.Node) -> None
         """Invisible nodes should be ignored."""
         pass
 
 
-class RefOnlyBulletListTransform(Transform):
+class RefOnlyBulletListTransform(SphinxTransform):
     """Change refonly bullet lists to use compact_paragraphs.
 
     Specifically implemented for 'Indices and Tables' section, which looks
@@ -58,11 +62,12 @@ class RefOnlyBulletListTransform(Transform):
     default_priority = 100
 
     def apply(self):
-        env = self.document.settings.env
-        if env.config.html_compact_lists:
+        # type: () -> None
+        if self.config.html_compact_lists:
             return
 
         def check_refonly_list(node):
+            # type: (nodes.Node) -> bool
             """Check for list with only references in it."""
             visitor = RefOnlyListChecker(self.document)
             try:

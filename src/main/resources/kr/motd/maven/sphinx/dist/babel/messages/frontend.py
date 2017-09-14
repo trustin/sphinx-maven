@@ -104,6 +104,10 @@ class Command(_Command):
     #: that are usable with optparse.
     option_aliases = {}
 
+    #: Choices for options that needed to be restricted to specific
+    #: list of choices.
+    option_choices = {}
+
     #: Log object. To allow replacement in the script command line runner.
     log = distutils_log
 
@@ -213,11 +217,8 @@ class compile_catalog(Command):
 
         for idx, (locale, po_file) in enumerate(po_files):
             mo_file = mo_files[idx]
-            infile = open(po_file, 'rb')
-            try:
+            with open(po_file, 'rb') as infile:
                 catalog = read_po(infile, locale)
-            finally:
-                infile.close()
 
             if self.statistics:
                 translated = 0
@@ -244,11 +245,8 @@ class compile_catalog(Command):
 
             self.log.info('compiling catalog %s to %s', po_file, mo_file)
 
-            outfile = open(mo_file, 'wb')
-            try:
+            with open(mo_file, 'wb') as outfile:
                 write_mo(outfile, catalog, use_fuzzy=self.use_fuzzy)
-            finally:
-                outfile.close()
 
 
 class extract_messages(Command):
@@ -279,6 +277,11 @@ class extract_messages(Command):
          'path to the mapping configuration file'),
         ('no-location', None,
          'do not include location comments with filename and line number'),
+        ('add-location=', None,
+         'location lines format. If it is not given or "full", it generates '
+         'the lines with both file name and line number. If it is "file", '
+         'the line number part is omitted. If it is "never", it completely '
+         'suppresses the lines (same as --no-location).'),
         ('omit-header', None,
          'do not include msgid "" entry in header'),
         ('output-file=', 'o',
@@ -323,6 +326,9 @@ class extract_messages(Command):
         'output-file': ('--output',),
         'strip-comments': ('--strip-comment-tags',),
     }
+    option_choices = {
+        'add-location': ('full', 'file', 'never',),
+    }
 
     def initialize_options(self):
         self.charset = 'utf-8'
@@ -330,6 +336,7 @@ class extract_messages(Command):
         self.no_default_keywords = False
         self.mapping_file = None
         self.no_location = False
+        self.add_location = None
         self.omit_header = False
         self.output_file = None
         self.input_dirs = None
@@ -344,6 +351,7 @@ class extract_messages(Command):
         self.version = None
         self.add_comments = None
         self.strip_comments = False
+        self.include_lineno = True
 
     def finalize_options(self):
         if self.input_dirs:
@@ -407,6 +415,11 @@ class extract_messages(Command):
             if not self.version:
                 self.version = self.distribution.get_version()
 
+        if self.add_location == 'never':
+            self.no_location = True
+        elif self.add_location == 'file':
+            self.include_lineno = False
+
     def run(self):
         mappings = self._get_mappings()
         with open(self.output_file, 'wb') as outfile:
@@ -416,7 +429,7 @@ class extract_messages(Command):
                               copyright_holder=self.copyright_holder,
                               charset=self.charset)
 
-            for path, (method_map, options_map) in mappings.items():
+            for path, method_map, options_map in mappings:
                 def callback(filename, method, options):
                     if method == 'ignore':
                         return
@@ -460,24 +473,22 @@ class extract_messages(Command):
                     catalog.add(message, None, [(filepath, lineno)],
                                 auto_comments=comments, context=context)
 
-            self.log.info('writing PO template file to %s' % self.output_file)
+            self.log.info('writing PO template file to %s', self.output_file)
             write_po(outfile, catalog, width=self.width,
                      no_location=self.no_location,
                      omit_header=self.omit_header,
                      sort_output=self.sort_output,
-                     sort_by_file=self.sort_by_file)
+                     sort_by_file=self.sort_by_file,
+                     include_lineno=self.include_lineno)
 
     def _get_mappings(self):
-        mappings = {}
+        mappings = []
 
         if self.mapping_file:
-            fileobj = open(self.mapping_file, 'U')
-            try:
+            with open(self.mapping_file, 'U') as fileobj:
                 method_map, options_map = parse_mapping(fileobj)
-                for path in self.input_paths:
-                    mappings[path] = method_map, options_map
-            finally:
-                fileobj.close()
+            for path in self.input_paths:
+                mappings.append((path, method_map, options_map))
 
         elif getattr(self.distribution, 'message_extractors', None):
             message_extractors = self.distribution.message_extractors
@@ -489,11 +500,11 @@ class extract_messages(Command):
                     for pattern, method, options in mapping:
                         method_map.append((pattern, method))
                         options_map[pattern] = options or {}
-                mappings[path] = method_map, options_map
+                mappings.append((path, method_map, options_map))
 
         else:
             for path in self.input_paths:
-                mappings[path] = DEFAULT_MAPPING, {}
+                mappings.append((path, DEFAULT_MAPPING, {}))
 
         return mappings
 
@@ -591,23 +602,17 @@ class init_catalog(Command):
             'creating catalog %s based on %s', self.output_file, self.input_file
         )
 
-        infile = open(self.input_file, 'rb')
-        try:
+        with open(self.input_file, 'rb') as infile:
             # Although reading from the catalog template, read_po must be fed
             # the locale in order to correctly calculate plurals
             catalog = read_po(infile, locale=self.locale)
-        finally:
-            infile.close()
 
         catalog.locale = self._locale
         catalog.revision_date = datetime.now(LOCALTZ)
         catalog.fuzzy = False
 
-        outfile = open(self.output_file, 'wb')
-        try:
+        with open(self.output_file, 'wb') as outfile:
             write_po(outfile, catalog, width=self.width)
-        finally:
-            outfile.close()
 
 
 class update_catalog(Command):
@@ -705,26 +710,20 @@ class update_catalog(Command):
         else:
             po_files.append((self.locale, self.output_file))
 
+        if not po_files:
+            raise DistutilsOptionError('no message catalogs found')
+
         domain = self.domain
         if not domain:
             domain = os.path.splitext(os.path.basename(self.input_file))[0]
 
-        infile = open(self.input_file, 'rb')
-        try:
+        with open(self.input_file, 'rb') as infile:
             template = read_po(infile)
-        finally:
-            infile.close()
-
-        if not po_files:
-            raise DistutilsOptionError('no message catalogs found')
 
         for locale, filename in po_files:
             self.log.info('updating catalog %s based on %s', filename, self.input_file)
-            infile = open(filename, 'rb')
-            try:
+            with open(filename, 'rb') as infile:
                 catalog = read_po(infile, locale=locale, domain=domain)
-            finally:
-                infile.close()
 
             catalog.update(
                 template, self.no_fuzzy_matching,
@@ -734,14 +733,11 @@ class update_catalog(Command):
             tmpname = os.path.join(os.path.dirname(filename),
                                    tempfile.gettempprefix() +
                                    os.path.basename(filename))
-            tmpfile = open(tmpname, 'wb')
             try:
-                try:
+                with open(tmpname, 'wb') as tmpfile:
                     write_po(tmpfile, catalog,
                              ignore_obsolete=self.ignore_obsolete,
                              include_previous=self.previous, width=self.width)
-                finally:
-                    tmpfile.close()
             except:
                 os.remove(tmpname)
                 raise
@@ -883,14 +879,15 @@ class CommandLineInterface(object):
             if short:
                 strs.append("-%s" % short)
             strs.extend(cmdclass.option_aliases.get(name, ()))
+            choices = cmdclass.option_choices.get(name, None)
             if name == as_args:
                 parser.usage += "<%s>" % name
             elif name in cmdclass.boolean_options:
                 parser.add_option(*strs, action="store_true", help=help)
             elif name in cmdclass.multiple_value_options:
-                parser.add_option(*strs, action="append", help=help)
+                parser.add_option(*strs, action="append", help=help, choices=choices)
             else:
-                parser.add_option(*strs, help=help, default=default)
+                parser.add_option(*strs, help=help, default=default, choices=choices)
         options, args = parser.parse_args(argv)
 
         if as_args:

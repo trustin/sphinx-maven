@@ -8,17 +8,34 @@
     :copyright: Copyright 2010 by Yuya Nishihara <yuya@tcha.org>.
     :license: BSD, see LICENSE for details.
 """
-import errno, hashlib, os, re, shlex, subprocess
+
+import codecs
+import errno
+import hashlib
+import os
+import re
+import shlex
+import subprocess
+
 from docutils import nodes
 from docutils.parsers.rst import directives
 from sphinx.errors import SphinxError
-from sphinx.util.compat import Directive
-from sphinx.util.osutil import ensuredir, ENOENT
+from docutils.parsers.rst import Directive
+from sphinx.util.osutil import (
+    ensuredir,
+    ENOENT,
+)
 
 try:
     from PIL import Image
 except ImportError:
     Image = None
+
+try:
+    from sphinx.util.i18n import search_image_for_language
+except ImportError:  # Sphinx < 1.4
+    def search_image_for_language(filename, env):
+        return filename
 
 class PlantUmlError(SphinxError):
     pass
@@ -42,6 +59,8 @@ class UmlDirective(Directive):
            Alice <- Bob: Hi
     """
     has_content = True
+    required_arguments = 0
+    optional_arguments = 1
     option_spec = {'alt': directives.unchanged,
                    'caption': directives.unchanged,
                    'height': directives.length_or_unitless,
@@ -51,8 +70,27 @@ class UmlDirective(Directive):
                    }
 
     def run(self):
+        warning = self.state.document.reporter.warning
+        env = self.state.document.settings.env
+        if self.arguments and self.content:
+            return [warning('uml directive cannot have both content and '
+                            'a filename argument', line=self.lineno)]
+        if self.arguments:
+            fn = search_image_for_language(self.arguments[0], env)
+            relfn, absfn = env.relfn2path(fn)
+            env.note_dependency(relfn)
+            try:
+                umlcode = _read_utf8(absfn)
+            except (IOError, UnicodeDecodeError) as err:
+                return [warning('PlantUML file "%s" cannot be read: %s'
+                                % (fn, err), line=self.lineno)]
+        else:
+            relfn = env.doc2path(env.docname, base=None)
+            umlcode = '\n'.join(self.content)
+
         node = plantuml(self.block_text, **self.options)
-        node['uml'] = '\n'.join(self.content)
+        node['uml'] = umlcode
+        node['incdir'] = os.path.dirname(relfn)
 
         # XXX maybe this should be moved to _visit_plantuml functions. it
         # seems wrong to insert "figure" node by "plantuml" directive.
@@ -71,8 +109,20 @@ class UmlDirective(Directive):
 
         return [node]
 
+def _read_utf8(filename):
+    fp = codecs.open(filename, 'rb', 'utf-8')
+    try:
+        return fp.read()
+    finally:
+        fp.close()
+
 def generate_name(self, node, fileformat):
-    key = hashlib.sha1(node['uml'].encode('utf-8')).hexdigest()
+    h = hashlib.sha1()
+    # may include different file relative to doc
+    h.update(node['incdir'].encode('utf-8'))
+    h.update(b'\0')
+    h.update(node['uml'].encode('utf-8'))
+    key = h.hexdigest()
     fname = 'plantuml-%s.%s' % (key, fileformat)
     imgpath = getattr(self.builder, 'imgpath', None)
     if imgpath:
@@ -100,13 +150,15 @@ def render_plantuml(self, node, fileformat):
     refname, outfname = generate_name(self, node, fileformat)
     if os.path.exists(outfname):
         return refname, outfname  # don't regenerate
+    absincdir = os.path.join(self.builder.srcdir, node['incdir'])
     ensuredir(os.path.dirname(outfname))
     f = open(outfname, 'wb')
     try:
         try:
             p = subprocess.Popen(generate_plantuml_args(self, fileformat),
                                  stdout=f, stdin=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+                                 stderr=subprocess.PIPE,
+                                 cwd=absincdir)
         except OSError as err:
             if err.errno != ENOENT:
                 raise

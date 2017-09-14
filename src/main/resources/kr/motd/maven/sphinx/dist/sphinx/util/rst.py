@@ -5,14 +5,15 @@
 
     reST helper functions.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import re
 
-symbols_re = re.compile('([!-/:-@\[-`{-~])')
+symbols_re = re.compile(r'([!-/:-@\[-`{-~])')
 
 
 def escape(text):
-    return symbols_re.sub(r'\\\1', text)
+    # type: (unicode) -> unicode
+    return symbols_re.sub(r'\\\1', text)  # type: ignore

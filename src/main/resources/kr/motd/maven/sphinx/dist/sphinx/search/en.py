@@ -5,20 +5,18 @@
 
     English search language: includes the JS porter stemmer.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 from sphinx.search import SearchLanguage
+from sphinx.util.stemmer import get_stemmer
 
-try:
-    from Stemmer import Stemmer as PyStemmer
-    PYSTEMMER = True
-except ImportError:
-    from sphinx.util.stemmer import PorterStemmer
-    PYSTEMMER = False
+if False:
+    # For type annotation
+    from typing import Dict  # NOQA
 
-english_stopwords = set("""
+english_stopwords = set(u"""
 a  and  are  as  at
 be  but  by
 for
@@ -224,22 +222,9 @@ class SearchEnglish(SearchLanguage):
     stopwords = english_stopwords
 
     def init(self, options):
-        if PYSTEMMER:
-            class Stemmer(object):
-                def __init__(self):
-                    self.stemmer = PyStemmer('porter')
-
-                def stem(self, word):
-                    return self.stemmer.stemWord(word)
-        else:
-            class Stemmer(PorterStemmer):
-                """All those porter stemmer implementations look hideous;
-                make at least the stem method nicer.
-                """
-                def stem(self, word):
-                    return PorterStemmer.stem(self, word, 0, len(word) - 1)
-
-        self.stemmer = Stemmer()
+        # type: (Dict) -> None
+        self.stemmer = get_stemmer()
 
     def stem(self, word):
+        # type: (unicode) -> unicode
         return self.stemmer.stem(word.lower())

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 # :Author: David Goodger, Günter Milde
 #          Based on the html4css1 writer by David Goodger.
 # :Maintainer: docutils-develop@lists.sourceforge.net
-# :Revision: $Revision: 7977 $
+# :Revision: $Revision: 8118 $
 # :Date: $Date: 2005-06-28$
 # :Copyright: © 2016 David Goodger, Günter Milde
 # :License: Released under the terms of the `2-Clause BSD license`_, in short:
@@ -15,14 +15,13 @@
 #
 # .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause
 
-
-# _html_base.py:  common definitions for Docutils HTML writers
-# ============================================================
+"""common definitions for Docutils HTML writers"""
 
 import sys
 import os.path
 import re
 import urllib
+
 try: # check for the Python Imaging Library
     import PIL.Image
 except ImportError:
@@ -32,6 +31,7 @@ except ImportError:
         PIL.Image = Image
     except ImportError:
         PIL = None
+
 import docutils
 from docutils import nodes, utils, writers, languages, io
 from docutils.utils.error_reporting import SafeString
@@ -54,7 +54,7 @@ class Writer(writers.Writer):
     settings_defaults = {'output_encoding_error_handler': 'xmlcharrefreplace'}
 
     # config_section = ... # set in subclass!
-    config_section_dependencies = ('writers',)
+    config_section_dependencies = ['writers', 'html writers']
 
     visitor_attributes = (
         'head_prefix', 'head', 'stylesheet', 'body_prefix',
@@ -95,13 +95,63 @@ class Writer(writers.Writer):
             self.parts[part] = ''.join(getattr(self, part))
 
 
-
 class HTMLTranslator(nodes.NodeVisitor):
 
-    """Generic Docutils to HTML translator.
+    """
+    Generic Docutils to HTML translator.
 
-    See the html4css1 and html5_polyglott for writers for full featured HTML
-    writers. """
+    See the `html4css1` and `html5_polyglot` writers for full featured
+    HTML writers.
+
+    .. IMPORTANT::
+      The `visit_*` and `depart_*` methods use a
+      heterogeneous stack, `self.context`.
+      When subclassing, make sure to be consistent in its use!
+
+      Examples for robust coding:
+
+      a) Override both `visit_*` and `depart_*` methods, don't call the
+         parent functions.
+
+      b) Extend both and unconditionally call the parent functions::
+
+           def visit_example(self, node):
+               if foo:
+                   self.body.append('<div class="foo">')
+               html4css1.HTMLTranslator.visit_example(self, node)
+
+           def depart_example(self, node):
+               html4css1.HTMLTranslator.depart_example(self, node)
+               if foo:
+                   self.body.append('</div>')
+
+      c) Extend both, calling the parent functions under the same
+         conditions::
+
+           def visit_example(self, node):
+               if foo:
+                   self.body.append('<div class="foo">\n')
+               else: # call the parent method
+                   _html_base.HTMLTranslator.visit_example(self, node)
+
+           def depart_example(self, node):
+               if foo:
+                   self.body.append('</div>\n')
+               else: # call the parent method
+                   _html_base.HTMLTranslator.depart_example(self, node)
+
+      d) Extend one method (call the parent), but don't otherwise use the
+         `self.context` stack::
+
+           def depart_example(self, node):
+               _html_base.HTMLTranslator.depart_example(self, node)
+               if foo:
+                   # implementation-specific code
+                   # that does not use `self.context`
+                   self.body.append('</div>\n')
+
+      This way, changes in stack use will not bite you.
+    """
 
     xml_declaration = '<?xml version="1.0" encoding="%s" ?>\n'
     doctype = '<!DOCTYPE html>\n'
@@ -115,17 +165,27 @@ class HTMLTranslator(nodes.NodeVisitor):
 
     # Template for the MathJax script in the header:
     mathjax_script = '<script type="text/javascript" src="%s"></script>\n'
-    # The latest version of MathJax from the distributed server:
-    # avaliable to the public under the `MathJax CDN Terms of Service`__
-    # __http://www.mathjax.org/download/mathjax-cdn-terms-of-service/
-    # may be overwritten by custom URL appended to "mathjax"
-    mathjax_url = ('https://cdn.mathjax.org/mathjax/latest/MathJax.js?'
-                   'config=TeX-AMS_CHTML')
+
+    mathjax_url = 'file:/usr/share/javascript/mathjax/MathJax.js'
+    """
+    URL of the MathJax javascript library.
+
+    The MathJax library ought to be installed on the same
+    server as the rest of the deployed site files and specified
+    in the `math-output` setting appended to "mathjax".
+    See `Docutils Configuration`__.
+
+    __ http://docutils.sourceforge.net/docs/user/config.html#math-output
+
+    The fallback tries a local MathJax installation at
+    ``/usr/share/javascript/mathjax/MathJax.js``.
+    """
 
     stylesheet_link = '<link rel="stylesheet" href="%s" type="text/css" />\n'
     embedded_stylesheet = '<style type="text/css">\n\n%s\n</style>\n'
     words_and_spaces = re.compile(r'\S+| +|\n')
-    sollbruchstelle = re.compile(r'.+\W\W.+|[-?].+', re.U) # wrap point inside word
+    # wrap point inside word:
+    in_word_wrap_point = re.compile(r'.+\W\W.+|[-?].+', re.U)
     lang_attribute = 'lang' # name changes to 'xml:lang' in XHTML 1.1
 
     special_characters = {ord('&'): u'&amp;',
@@ -135,6 +195,7 @@ class HTMLTranslator(nodes.NodeVisitor):
                           ord('@'): u'&#64;', # may thwart address harvesters
                          }
     """Character references for characters with a special meaning in HTML."""
+
 
     def __init__(self, document):
         nodes.NodeVisitor.__init__(self, document)
@@ -168,9 +229,11 @@ class HTMLTranslator(nodes.NodeVisitor):
         self.math_output_options = self.math_output[1:]
         self.math_output = self.math_output[0].lower()
 
-        # A heterogenous stack used in conjunction with the tree traversal.
-        # Make sure that the pops correspond to the pushes:
         self.context = []
+        """Heterogeneous stack.
+
+        Used by visit_* and depart_* functions in conjunction with the tree
+        traversal. Make sure that the pops correspond to the pushes."""
 
         self.topic_classes = [] # TODO: replace with self_in_contents
         self.colspecs = []
@@ -289,9 +352,10 @@ class HTMLTranslator(nodes.NodeVisitor):
                 # elements aren't allowed in XHTML (even if they do
                 # not all have a "href" attribute).
                 if empty or isinstance(node,
-                            (nodes.bullet_list, nodes.enumerated_list,
-                             nodes.definition_list, nodes.field_list,
-                             nodes.option_list, nodes.docinfo)):
+                            (nodes.bullet_list, nodes.docinfo,
+                             nodes.definition_list, nodes.enumerated_list,
+                             nodes.field_list, nodes.option_list,
+                             nodes.table)):
                     # Insert target right in front of element.
                     prefix.append('<span id="%s"></span>' % id)
                 else:
@@ -360,7 +424,7 @@ class HTMLTranslator(nodes.NodeVisitor):
 
     def visit_address(self, node):
         self.visit_docinfo_item(node, 'address', meta=False)
-        self.body.append(self.starttag(node, 'pre', 
+        self.body.append(self.starttag(node, 'pre',
                                        suffix= '', CLASS='address'))
 
     def depart_address(self, node):
@@ -645,8 +709,9 @@ class HTMLTranslator(nodes.NodeVisitor):
         self.body.append('\n</pre>\n')
 
     def visit_document(self, node):
-        self.head.append('<title>%s</title>\n'
-                         % self.encode(node.get('title', '')))
+        title = (node.get('title', '') or os.path.basename(node['source'])
+                 or 'docutils document without title')
+        self.head.append('<title>%s</title>\n' % self.encode(title))
 
     def depart_document(self, node):
         self.head_prefix.extend([self.doctype,
@@ -983,7 +1048,7 @@ class HTMLTranslator(nodes.NodeVisitor):
         # Protect text like ``--an-option`` and the regular expression
         # ``[+]?(\d+(\.\d*)?|\.\d+)`` from bad line wrapping
         for token in self.words_and_spaces.findall(text):
-            if token.strip() and self.sollbruchstelle.search(token):
+            if token.strip() and self.in_word_wrap_point.search(token):
                 self.body.append('<span class="pre">%s</span>'
                                     % self.encode(token))
             else:
@@ -1032,7 +1097,7 @@ class HTMLTranslator(nodes.NodeVisitor):
         wrappers = {# math_mode: (inline, block)
                     'mathml':  ('$%s$',   u'\\begin{%s}\n%s\n\\end{%s}'),
                     'html':    ('$%s$',   u'\\begin{%s}\n%s\n\\end{%s}'),
-                    'mathjax': ('\(%s\)', u'\\begin{%s}\n%s\n\\end{%s}'),
+                    'mathjax': (r'\(%s\)', u'\\begin{%s}\n%s\n\\end{%s}'),
                     'latex':   (None,     None),
                    }
         wrapper = wrappers[self.math_output][math_env != '']
@@ -1050,8 +1115,15 @@ class HTMLTranslator(nodes.NodeVisitor):
         if self.math_output in ('latex', 'mathjax'):
             math_code = self.encode(math_code)
         if self.math_output == 'mathjax' and not self.math_header:
-            if self.math_output_options:
+            try:
                 self.mathjax_url = self.math_output_options[0]
+            except IndexError:
+                self.document.reporter.warning('No MathJax URL specified, '
+                    'using local fallback (see config.html)')
+            # append configuration, if not already present in the URL:
+            # input LaTeX with AMS, output common HTML
+            if '?' not in self.mathjax_url:
+                self.mathjax_url += '?config=TeX-AMS_CHTML'
             self.math_header = [self.mathjax_script % self.mathjax_url]
         elif self.math_output == 'html':
             if self.math_output_options and not self.math_header:

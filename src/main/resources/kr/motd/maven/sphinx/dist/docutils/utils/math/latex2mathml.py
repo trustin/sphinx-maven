@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# :Id: $Id: latex2mathml.py 7865 2015-04-12 10:06:43Z milde $
+# :Id: $Id: latex2mathml.py 7995 2016-12-10 17:50:59Z milde $
 # :Copyright: © 2010 Günter Milde.
 #             Based on rst2mathml.py from the latex_math sandbox project
 #             © 2005 Jens Jørgen Mortensen
@@ -151,8 +151,8 @@ mathscr = {
           }
 
 negatables = {'=': u'\u2260',
-              '\in': u'\u2209',
-              '\equiv': u'\u2262'}
+              r'\in': u'\u2209',
+              r'\equiv': u'\u2262'}
 
 # LaTeX to MathML translation stuff:
 class math:

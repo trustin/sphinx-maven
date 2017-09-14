@@ -28,7 +28,7 @@ from babel._compat import string_types, number_types, PY2, cmp
 __all__ = ['Message', 'Catalog', 'TranslationError']
 
 
-PYTHON_FORMAT = re.compile(r'''(?x)
+PYTHON_FORMAT = re.compile(r'''
     \%
         (?:\(([\w]*)\))?
         (
@@ -37,7 +37,7 @@ PYTHON_FORMAT = re.compile(r'''(?x)
             [hlL]?
         )
         ([diouxXeEfFgGcrs%])
-''')
+''', re.VERBOSE)
 
 
 def _parse_datetime_header(value):
@@ -83,7 +83,7 @@ class Message(object):
                    pluralizable messages
         :param string: the translated message string, or a
                        ``(singular, plural)`` tuple for pluralizable messages
-        :param locations: a sequence of ``(filenname, lineno)`` tuples
+        :param locations: a sequence of ``(filename, lineno)`` tuples
         :param flags: a set or sequence of flags
         :param auto_comments: a sequence of automatic comments for the message
         :param user_comments: a sequence of user comments for the message
@@ -116,21 +116,13 @@ class Message(object):
         return '<%s %r (flags: %r)>' % (type(self).__name__, self.id,
                                         list(self.flags))
 
-    def __cmp__(self, obj):
+    def __cmp__(self, other):
         """Compare Messages, taking into account plural ids"""
-        def values_to_compare():
-            if isinstance(obj, Message):
-                plural = self.pluralizable
-                obj_plural = obj.pluralizable
-                if plural and obj_plural:
-                    return self.id[0], obj.id[0]
-                elif plural:
-                    return self.id[0], obj.id
-                elif obj_plural:
-                    return self.id, obj.id[0]
-            return self.id, obj.id
-        this, other = values_to_compare()
-        return cmp(this, other)
+        def values_to_compare(obj):
+            if isinstance(obj, Message) and obj.pluralizable:
+                return (obj.id[0], obj.context or '')
+            return (obj.id, obj.context or '')
+        return cmp(values_to_compare(self), values_to_compare(other))
 
     def __gt__(self, other):
         return self.__cmp__(other) > 0
@@ -402,6 +394,9 @@ class Catalog(object):
                 self.msgid_bugs_address = value
             elif name == 'last-translator':
                 self.last_translator = value
+            elif name == 'language':
+                value = value.replace('-', '_')
+                self.locale = Locale.parse(value)
             elif name == 'language-team':
                 self.language_team = value
             elif name == 'content-type':
@@ -477,7 +472,7 @@ class Catalog(object):
         >>> Catalog(locale='en').num_plurals
         2
         >>> Catalog(locale='ga').num_plurals
-        3
+        5
 
         :type: `int`"""
         if self._num_plurals is None:
@@ -494,7 +489,7 @@ class Catalog(object):
         >>> Catalog(locale='en').plural_expr
         '(n != 1)'
         >>> Catalog(locale='ga').plural_expr
-        '(n==1 ? 0 : n==2 ? 1 : 2)'
+        '(n==1 ? 0 : n==2 ? 1 : n>=3 && n<=6 ? 2 : n>=7 && n<=10 ? 3 : 4)'
 
         :type: `string_types`"""
         if self._plural_expr is None:
@@ -625,7 +620,7 @@ class Catalog(object):
                    pluralizable messages
         :param string: the translated message string, or a
                        ``(singular, plural)`` tuple for pluralizable messages
-        :param locations: a sequence of ``(filenname, lineno)`` tuples
+        :param locations: a sequence of ``(filename, lineno)`` tuples
         :param flags: a set or sequence of flags
         :param auto_comments: a sequence of automatic comments
         :param user_comments: a sequence of user comments

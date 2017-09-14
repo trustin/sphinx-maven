@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# :Id: $Id: error_reporting.py 7947 2016-07-22 08:49:52Z milde $
+# :Id: $Id: error_reporting.py 8119 2017-06-22 20:59:19Z milde $
 # :Copyright: © 2011 Günter Milde.
 # :License: Released under the terms of the `2-Clause BSD license`_, in short:
 #
@@ -54,6 +54,8 @@ else:
         # and https://sourceforge.net/p/docutils/bugs/298/
         if "unknown locale: UTF-8" in error.args:
             locale_encoding = "UTF-8"
+        else:
+            locale_encoding = None
     except: # any other problems determining the locale -> use None
         locale_encoding = None
     try:

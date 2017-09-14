@@ -4,13 +4,15 @@
 
     Master layout template for Sphinx themes.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 #}
-{%- block doctype -%}
+{%- block doctype -%}{%- if html5_doctype %}
+<!DOCTYPE html>
+{%- else %}
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-{%- endblock %}
+{%- endif %}{%- endblock %}
 {%- set reldelim1 = reldelim1 is not defined and ' &#187;' or reldelim1 %}
 {%- set reldelim2 = reldelim2 is not defined and ' |' or reldelim2 %}
 {%- set render_sidebar = (not embedded) and (not theme_nosidebar|tobool) and
@@ -103,21 +105,37 @@
 {%- macro css() %}
     <link rel="stylesheet" href="{{ pathto('_static/' + style, 1) }}" type="text/css" />
     <link rel="stylesheet" href="{{ pathto('_static/pygments.css', 1) }}" type="text/css" />
-    {%- for cssfile in css_files %}
-    <link rel="stylesheet" href="{{ pathto(cssfile, 1) }}" type="text/css" />
+    {%- for css in css_files %}
+      {%- if css|attr("rel") %}
+    <link rel="{{ css.rel }}" href="{{ pathto(css.filename, 1) }}" type="text/css"{% if css.title is not none %} title="{{ css.title }}"{% endif %} />
+      {%- else %}
+    <link rel="stylesheet" href="{{ pathto(css, 1) }}" type="text/css" />
+      {%- endif %}
     {%- endfor %}
 {%- endmacro %}
 
+{%- if html_tag %}
+{{ html_tag }}
+{%- else %}
 <html xmlns="http://www.w3.org/1999/xhtml"{% if language is not none %} lang="{{ language }}"{% endif %}>
+{%- endif %}
   <head>
+    {%- if use_meta_charset %}
+    <meta charset="{{ encoding }}" />
+    {%- else %}
     <meta http-equiv="Content-Type" content="text/html; charset={{ encoding }}" />
-    {{ metatags }}
+    {%- endif %}
+    {{- metatags }}
     {%- block htmltitle %}
     <title>{{ title|striptags|e }}{{ titlesuffix }}</title>
     {%- endblock %}
-    {{ css() }}
+    {%- block csss %}
+    {{- css() }}
+    {%- endblock %}
     {%- if not embedded %}
-    {{ script() }}
+    {%- block scripts %}
+    {{- script() }}
+    {%- endblock %}
     {%- if use_opensearch %}
     <link rel="search" type="application/opensearchdescription+xml"
           title="{% trans docstitle=docstitle|e %}Search within {{ docstitle }}{% endtrans %}"
@@ -149,7 +167,7 @@
 {%- endblock %}
 {%- block extrahead %} {% endblock %}
   </head>
-  <body role="document">
+  <body>
 {%- block header %}{% endblock %}
 
 {%- block relbar1 %}{{ relbar() }}{% endblock %}

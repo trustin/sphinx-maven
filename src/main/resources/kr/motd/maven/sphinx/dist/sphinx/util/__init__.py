@@ -5,7 +5,7 @@
 
     Utility functions for Sphinx.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import absolute_import
@@ -19,18 +19,22 @@ import posixpath
 import traceback
 import unicodedata
 from os import path
+from time import mktime, strptime
 from codecs import BOM_UTF8
+from datetime import datetime
 from collections import deque
 
-from six import iteritems, text_type, binary_type
+from six import text_type, binary_type, itervalues
 from six.moves import range
 from six.moves.urllib.parse import urlsplit, urlunsplit, quote_plus, parse_qsl, urlencode
 from docutils.utils import relative_path
 
 from sphinx.errors import PycodeError, SphinxParallelError, ExtensionError
-from sphinx.util.console import strip_colors
+from sphinx.util import logging
+from sphinx.util.console import strip_colors, colorize, bold, term_width_line  # type: ignore
 from sphinx.util.fileutil import copy_asset_file
 from sphinx.util.osutil import fs_encoding
+from sphinx.util import smartypants  # noqa
 
 # import other utilities; partly for backwards compatibility, so don't
 # prune unused ones indiscriminately
@@ -42,19 +46,28 @@ from sphinx.util.nodes import (   # noqa
     caption_ref_re)
 from sphinx.util.matching import patfilter  # noqa
 
+if False:
+    # For type annotation
+    from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Pattern, Sequence, Set, Tuple, Union  # NOQA
+
+
+logger = logging.getLogger(__name__)
+
 # Generally useful regular expressions.
-ws_re = re.compile(r'\s+')
-url_re = re.compile(r'(?P<schema>.+)://.*')
+ws_re = re.compile(r'\s+')                      # type: Pattern
+url_re = re.compile(r'(?P<schema>.+)://.*')     # type: Pattern
 
 
 # High-level utility functions.
 
 def docname_join(basedocname, docname):
+    # type: (unicode, unicode) -> unicode
     return posixpath.normpath(
         posixpath.join('/' + basedocname, '..', docname))[1:]
 
 
 def path_stabilize(filepath):
+    # type: (unicode) -> unicode
     "normalize path separater and unicode string"
     newpath = filepath.replace(os.path.sep, SEP)
     if isinstance(newpath, text_type):
@@ -63,6 +76,7 @@ def path_stabilize(filepath):
 
 
 def get_matching_files(dirname, exclude_matchers=()):
+    # type: (unicode, Tuple[Callable[[unicode], bool], ...]) -> Iterable[unicode]
     """Get all file names in a directory, recursively.
 
     Exclude files and dirs matching some matcher in *exclude_matchers*.
@@ -75,9 +89,9 @@ def get_matching_files(dirname, exclude_matchers=()):
         relativeroot = root[dirlen:]
 
         qdirs = enumerate(path_stabilize(path.join(relativeroot, dn))
-                          for dn in dirs)
+                          for dn in dirs)  # type: Iterable[Tuple[int, unicode]]
         qfiles = enumerate(path_stabilize(path.join(relativeroot, fn))
-                           for fn in files)
+                           for fn in files)  # type: Iterable[Tuple[int, unicode]]
         for matcher in exclude_matchers:
             qdirs = [entry for entry in qdirs if not matcher(entry[1])]
             qfiles = [entry for entry in qfiles if not matcher(entry[1])]
@@ -89,6 +103,7 @@ def get_matching_files(dirname, exclude_matchers=()):
 
 
 def get_matching_docs(dirname, suffixes, exclude_matchers=()):
+    # type: (unicode, List[unicode], Tuple[Callable[[unicode], bool], ...]) -> Iterable[unicode]  # NOQA
     """Get all file names (without suffixes) matching a suffix in a directory,
     recursively.
 
@@ -109,9 +124,11 @@ class FilenameUniqDict(dict):
     appear in.  Used for images and downloadable files in the environment.
     """
     def __init__(self):
-        self._existing = set()
+        # type: () -> None
+        self._existing = set()  # type: Set[unicode]
 
     def add_file(self, docname, newfile):
+        # type: (unicode, unicode) -> unicode
         if newfile in self:
             self[newfile][0].add(docname)
             return self[newfile][1]
@@ -126,6 +143,7 @@ class FilenameUniqDict(dict):
         return uniquename
 
     def purge_doc(self, docname):
+        # type: (unicode) -> None
         for filename, (docs, unique) in list(self.items()):
             docs.discard(docname)
             if not docs:
@@ -133,19 +151,23 @@ class FilenameUniqDict(dict):
                 self._existing.discard(unique)
 
     def merge_other(self, docnames, other):
+        # type: (Set[unicode], Dict[unicode, Tuple[Set[unicode], Any]]) -> None
         for filename, (docs, unique) in other.items():
-            for doc in docs & docnames:
+            for doc in docs & set(docnames):
                 self.add_file(doc, filename)
 
     def __getstate__(self):
+        # type: () -> Set[unicode]
         return self._existing
 
     def __setstate__(self, state):
+        # type: (Set[unicode]) -> None
         self._existing = state
 
 
 def copy_static_entry(source, targetdir, builder, context={},
                       exclude_matchers=(), level=0):
+    # type: (unicode, unicode, Any, Dict, Tuple[Callable, ...], int) -> None
     """[DEPRECATED] Copy a HTML builder static_path entry from source to targetdir.
 
     Handles all possible cases of files, directories and subdirectories.
@@ -183,6 +205,7 @@ _DEBUG_HEADER = '''\
 
 
 def save_traceback(app):
+    # type: (Any) -> unicode
     """Save the current exception's traceback in a temporary file."""
     import sphinx
     import jinja2
@@ -197,30 +220,30 @@ def save_traceback(app):
     last_msgs = ''
     if app is not None:
         last_msgs = '\n'.join(
-            '#   %s' % strip_colors(force_decode(s, 'utf-8')).strip()
+            '#   %s' % strip_colors(force_decode(s, 'utf-8')).strip()  # type: ignore
             for s in app.messagelog)
     os.write(fd, (_DEBUG_HEADER %
                   (sphinx.__display_version__,
                    platform.python_version(),
                    platform.python_implementation(),
                    docutils.__version__, docutils.__version_details__,
-                   jinja2.__version__,
+                   jinja2.__version__,  # type: ignore
                    last_msgs)).encode('utf-8'))
     if app is not None:
-        for extname, extmod in iteritems(app._extensions):
-            modfile = getattr(extmod, '__file__', 'unknown')
+        for ext in itervalues(app.extensions):
+            modfile = getattr(ext.module, '__file__', 'unknown')
             if isinstance(modfile, bytes):
                 modfile = modfile.decode(fs_encoding, 'replace')
-            version = app._extension_metadata[extname]['version']
-            if version != 'builtin':
+            if ext.version != 'builtin':
                 os.write(fd, ('#   %s (%s) from %s\n' %
-                              (extname, version, modfile)).encode('utf-8'))
+                              (ext.name, ext.version, modfile)).encode('utf-8'))
     os.write(fd, exc_format.encode('utf-8'))
     os.close(fd)
     return path
 
 
 def get_module_source(modname):
+    # type: (str) -> Tuple[unicode, unicode]
     """Try to find the source code for a module.
 
     Can return ('file', 'filename') in which case the source is in the given
@@ -260,6 +283,11 @@ def get_module_source(modname):
 
 
 def get_full_modname(modname, attribute):
+    # type: (str, unicode) -> unicode
+    if modname is None:
+        # Prevents a TypeError: if the last getattr() call will return None
+        # then it's better to return it directly
+        return None
     __import__(modname)
     module = sys.modules[modname]
 
@@ -278,15 +306,18 @@ _coding_re = re.compile(r'coding[:=]\s*([-\w.]+)')
 
 
 def detect_encoding(readline):
+    # type: (Callable) -> unicode
     """Like tokenize.detect_encoding() from Py3k, but a bit simplified."""
 
     def read_or_stop():
+        # type: () -> unicode
         try:
             return readline()
         except StopIteration:
             return None
 
     def get_normal_name(orig_enc):
+        # type: (str) -> str
         """Imitates get_normal_name in tokenizer.c."""
         # Only care about the first 12 characters.
         enc = orig_enc[:12].lower().replace('_', '-')
@@ -298,12 +329,13 @@ def detect_encoding(readline):
         return orig_enc
 
     def find_cookie(line):
+        # type: (unicode) -> unicode
         try:
             line_string = line.decode('ascii')
         except UnicodeDecodeError:
             return None
 
-        matches = _coding_re.findall(line_string)
+        matches = _coding_re.findall(line_string)  # type: ignore
         if not matches:
             return None
         return get_normal_name(matches[0])
@@ -334,14 +366,17 @@ class Tee(object):
     File-like object writing to two streams.
     """
     def __init__(self, stream1, stream2):
+        # type: (IO, IO) -> None
         self.stream1 = stream1
         self.stream2 = stream2
 
     def write(self, text):
+        # type: (unicode) -> None
         self.stream1.write(text)
         self.stream2.write(text)
 
     def flush(self):
+        # type: () -> None
         if hasattr(self.stream1, 'flush'):
             self.stream1.flush()
         if hasattr(self.stream2, 'flush'):
@@ -349,6 +384,7 @@ class Tee(object):
 
 
 def parselinenos(spec, total):
+    # type: (unicode, int) -> List[int]
     """Parse a line number spec (such as "1,2,4-6") and return a list of
     wanted line numbers.
     """
@@ -357,20 +393,28 @@ def parselinenos(spec, total):
     for part in parts:
         try:
             begend = part.strip().split('-')
-            if len(begend) > 2:
+            if ['', ''] == begend:
                 raise ValueError
-            if len(begend) == 1:
+            elif len(begend) == 1:
                 items.append(int(begend[0]) - 1)
+            elif len(begend) == 2:
+                start = int(begend[0] or 1)     # type: ignore
+                                                # left half open (cf. -10)
+                end = int(begend[1] or max(start, total))   # type: ignore
+                                                            # right half open (cf. 10-)
+                if start > end:  # invalid range (cf. 10-1)
+                    raise ValueError
+                items.extend(range(start - 1, end))
             else:
-                start = (begend[0] == '') and 0 or int(begend[0]) - 1
-                end = (begend[1] == '') and total or int(begend[1])
-                items.extend(range(start, end))
+                raise ValueError
         except Exception:
             raise ValueError('invalid line number spec: %r' % spec)
+
     return items
 
 
 def force_decode(string, encoding):
+    # type: (unicode, unicode) -> unicode
     """Forcibly get a unicode string out of a bytestring."""
     if isinstance(string, binary_type):
         try:
@@ -387,16 +431,20 @@ def force_decode(string, encoding):
 
 class attrdict(dict):
     def __getattr__(self, key):
+        # type: (unicode) -> unicode
         return self[key]
 
     def __setattr__(self, key, val):
+        # type: (unicode, unicode) -> None
         self[key] = val
 
     def __delattr__(self, key):
+        # type: (unicode) -> None
         del self[key]
 
 
 def rpartition(s, t):
+    # type: (unicode, unicode) -> Tuple[unicode, unicode]
     """Similar to str.rpartition from 2.5, but doesn't return the separator."""
     i = s.rfind(t)
     if i != -1:
@@ -405,6 +453,7 @@ def rpartition(s, t):
 
 
 def split_into(n, type, value):
+    # type: (int, unicode, unicode) -> List[unicode]
     """Split an index entry into a given number of parts at semicolons."""
     parts = [x.strip() for x in value.split(';', n - 1)]
     if sum(1 for part in parts if part) < n:
@@ -413,6 +462,7 @@ def split_into(n, type, value):
 
 
 def split_index_msg(type, value):
+    # type: (unicode, unicode) -> List[unicode]
     # new entry types must be listed in directives/other.py!
     if type == 'single':
         try:
@@ -434,10 +484,11 @@ def split_index_msg(type, value):
 
 
 def format_exception_cut_frames(x=1):
+    # type: (int) -> unicode
     """Format an exception with traceback, but only the last x frames."""
     typ, val, tb = sys.exc_info()
     # res = ['Traceback (most recent call last):\n']
-    res = []
+    res = []  # type: List[unicode]
     tbres = traceback.format_tb(tb)
     res += tbres[-x:]
     res += traceback.format_exception_only(typ, val)
@@ -450,13 +501,16 @@ class PeekableIterator(object):
     what's the next item.
     """
     def __init__(self, iterable):
-        self.remaining = deque()
+        # type: (Iterable) -> None
+        self.remaining = deque()  # type: deque
         self._iterator = iter(iterable)
 
     def __iter__(self):
+        # type: () -> PeekableIterator
         return self
 
     def __next__(self):
+        # type: () -> Any
         """Return the next item from the iterator."""
         if self.remaining:
             return self.remaining.popleft()
@@ -465,19 +519,22 @@ class PeekableIterator(object):
     next = __next__  # Python 2 compatibility
 
     def push(self, item):
+        # type: (Any) -> None
         """Push the `item` on the internal stack, it will be returned on the
         next :meth:`next` call.
         """
         self.remaining.append(item)
 
     def peek(self):
+        # type: () -> Any
         """Return the next item without changing the state of the iterator."""
-        item = next(self)
+        item = next(self)  # type: ignore
         self.push(item)
         return item
 
 
 def import_object(objname, source=None):
+    # type: (str, unicode) -> Any
     try:
         module, name = objname.rsplit('.', 1)
     except ValueError as err:
@@ -497,7 +554,8 @@ def import_object(objname, source=None):
 
 
 def encode_uri(uri):
-    split = list(urlsplit(uri))
+    # type: (unicode) -> unicode
+    split = list(urlsplit(uri))  # type: Any
     split[1] = split[1].encode('idna').decode('ascii')
     split[2] = quote_plus(split[2].encode('utf-8'), '/').decode('ascii')
     query = list((q, quote_plus(v.encode('utf-8')))
@@ -507,9 +565,102 @@ def encode_uri(uri):
 
 
 def split_docinfo(text):
-    docinfo_re = re.compile('\A((?:\s*:\w+:.*?\n(?:[ \t]+.*?\n)*)+)', re.M)
-    result = docinfo_re.split(text, 1)
+    # type: (unicode) -> Sequence[unicode]
+    docinfo_re = re.compile('\\A((?:\\s*:\\w+:.*?\n(?:[ \\t]+.*?\n)*)+)', re.M)
+    result = docinfo_re.split(text, 1)  # type: ignore
     if len(result) == 1:
         return '', result[0]
     else:
         return result[1:]
+
+
+def display_chunk(chunk):
+    # type: (Any) -> unicode
+    if isinstance(chunk, (list, tuple)):
+        if len(chunk) == 1:
+            return text_type(chunk[0])
+        return '%s .. %s' % (chunk[0], chunk[-1])
+    return text_type(chunk)
+
+
+def old_status_iterator(iterable, summary, color="darkgreen", stringify_func=display_chunk):
+    # type: (Iterable, unicode, str, Callable[[Any], unicode]) -> Iterator
+    l = 0
+    for item in iterable:
+        if l == 0:
+            logger.info(bold(summary), nonl=True)
+            l = 1
+        logger.info(stringify_func(item), color=color, nonl=True)
+        logger.info(" ", nonl=True)
+        yield item
+    if l == 1:
+        logger.info('')
+
+
+# new version with progress info
+def status_iterator(iterable, summary, color="darkgreen", length=0, verbosity=0,
+                    stringify_func=display_chunk):
+    # type: (Iterable, unicode, str, int, int, Callable[[Any], unicode]) -> Iterable  # NOQA
+    if length == 0:
+        for item in old_status_iterator(iterable, summary, color, stringify_func):
+            yield item
+        return
+    l = 0
+    summary = bold(summary)
+    for item in iterable:
+        l += 1
+        s = '%s[%3d%%] %s' % (summary, 100 * l / length, colorize(color, stringify_func(item)))
+        if verbosity:
+            s += '\n'
+        else:
+            s = term_width_line(s)
+        logger.info(s, nonl=True)
+        yield item
+    if l > 0:
+        logger.info('')
+
+
+def epoch_to_rfc1123(epoch):
+    """Convert datetime format epoch to RFC1123."""
+    from babel.dates import format_datetime
+
+    dt = datetime.fromtimestamp(epoch)
+    fmt = 'EEE, dd LLL yyyy hh:mm:ss'
+    return format_datetime(dt, fmt, locale='en') + ' GMT'
+
+
+def rfc1123_to_epoch(rfc1123):
+    return mktime(strptime(rfc1123, '%a, %d %b %Y %H:%M:%S %Z'))
+
+
+def xmlname_checker():
+    # https://www.w3.org/TR/REC-xml/#NT-Name
+    # Only Python 3.3 or newer support character code in regular expression
+    name_start_chars = [
+        u':', [u'A', u'Z'], u'_',  [u'a', u'z'], [u'\u00C0', u'\u00D6'],
+        [u'\u00D8', u'\u00F6'], [u'\u00F8', u'\u02FF'], [u'\u0370', u'\u037D'],
+        [u'\u037F', u'\u1FFF'], [u'\u200C', u'\u200D'], [u'\u2070', u'\u218F'],
+        [u'\u2C00', u'\u2FEF'], [u'\u3001', u'\uD7FF'], [u'\uF900', u'\uFDCF'],
+        [u'\uFDF0', u'\uFFFD']]
+
+    if sys.version_info.major == 3:
+        name_start_chars.append([u'\U00010000', u'\U000EFFFF'])
+
+    name_chars = [
+        u"\\-", u"\\.", [u'0', u'9'], u'\u00B7', [u'\u0300', u'\u036F'],
+        [u'\u203F', u'\u2040']
+    ]
+
+    def convert(entries, splitter=u'|'):
+        results = []
+        for entry in entries:
+            if isinstance(entry, list):
+                results.append(u'[%s]' % convert(entry, u'-'))
+            else:
+                results.append(entry)
+        return splitter.join(results)
+
+    start_chars_regex = convert(name_start_chars)
+    name_chars_regex = convert(name_chars)
+    return re.compile(u'(%s)(%s|%s)*' % (
+        start_chars_regex, start_chars_regex, name_chars_regex))

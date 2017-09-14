@@ -1,4 +1,4 @@
-# $Id: peps.py 7773 2014-10-08 15:08:29Z grubert $
+# $Id: peps.py 7995 2016-12-10 17:50:59Z milde $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -113,7 +113,7 @@ class Headers(Transform):
             elif name in ('replaces', 'replaced-by', 'requires'):
                 newbody = []
                 space = nodes.Text(' ')
-                for refpep in re.split(',?\s+', body.astext()):
+                for refpep in re.split(r',?\s+', body.astext()):
                     pepno = int(refpep)
                     newbody.append(nodes.reference(
                         refpep, refpep,

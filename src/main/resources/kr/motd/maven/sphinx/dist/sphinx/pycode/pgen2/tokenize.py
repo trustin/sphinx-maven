@@ -37,6 +37,10 @@ from six import PY3
 from sphinx.pycode.pgen2.token import *
 from sphinx.pycode.pgen2 import token
 
+if False:
+    # For type annotation
+    from typing import List  # NOQA
+
 __all__ = [x for x in dir(token) if x[0] != '_'] + ["tokenize",
            "generate_tokens", "untokenize"]
 del token
@@ -183,7 +187,7 @@ def tokenize_loop(readline, tokeneater):
 class Untokenizer:
 
     def __init__(self):
-        self.tokens = []
+        self.tokens = []  # type: List[unicode]
         self.prev_row = 1
         self.prev_col = 0
 
@@ -294,17 +298,17 @@ def generate_tokens(readline):
 
         if contstr:                            # continued string
             if not line:
-                raise TokenError("EOF in multi-line string", strstart)
-            endmatch = endprog.match(line)
+                raise TokenError("EOF in multi-line string", strstart)  # type: ignore
+            endmatch = endprog.match(line)  # type: ignore
             if endmatch:
                 pos = end = endmatch.end(0)
                 yield (STRING, contstr + line[:end],
-                       strstart, (lnum, end), contline + line)
+                       strstart, (lnum, end), contline + line)  # type: ignore
                 contstr, needcont = '', 0
                 contline = None
             elif needcont and line[-2:] != '\\\n' and line[-3:] != '\\\r\n':
                 yield (ERRORTOKEN, contstr + line,
-                           strstart, (lnum, len(line)), contline)
+                           strstart, (lnum, len(line)), contline)  # type: ignore
                 contstr = ''
                 contline = None
                 continue
@@ -333,7 +337,7 @@ def generate_tokens(readline):
                     yield (NL, line[nl_pos:],
                            (lnum, nl_pos), (lnum, len(line)), line)
                 else:
-                    yield ((NL, COMMENT)[line[pos] == '#'], line[pos:],
+                    yield ((NL, COMMENT)[line[pos] == '#'], line[pos:],  # type: ignore
                            (lnum, pos), (lnum, len(line)), line)
                 continue
 

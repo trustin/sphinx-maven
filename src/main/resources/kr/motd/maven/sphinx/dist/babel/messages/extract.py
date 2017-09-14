@@ -22,7 +22,7 @@ from os.path import relpath
 import sys
 from tokenize import generate_tokens, COMMENT, NAME, OP, STRING
 
-from babel.util import parse_encoding, pathmatch
+from babel.util import parse_encoding, parse_future_flags, pathmatch
 from babel._compat import PY2, text_type
 from textwrap import dedent
 
@@ -137,9 +137,10 @@ def extract_from_dir(dirname=None, method_map=DEFAULT_MAPPING,
 
     absname = os.path.abspath(dirname)
     for root, dirnames, filenames in os.walk(absname):
-        for subdir in dirnames:
-            if subdir.startswith('.') or subdir.startswith('_'):
-                dirnames.remove(subdir)
+        dirnames[:] = [
+            subdir for subdir in dirnames
+            if not (subdir.startswith('.') or subdir.startswith('_'))
+        ]
         dirnames.sort()
         filenames.sort()
         for filename in filenames:
@@ -167,6 +168,8 @@ def check_and_call_extract_file(filepath, method_map, options_map,
     So, given an absolute path to a file `filepath`, we want to check using
     just the relative path from `dirpath` to `filepath`.
 
+    Yields 5-tuples (filename, lineno, messages, comments, context).
+
     :param filepath: An absolute path to a file that exists.
     :param method_map: a list of ``(pattern, method)`` tuples that maps of
                        extraction method names to extended glob patterns
@@ -185,6 +188,8 @@ def check_and_call_extract_file(filepath, method_map, options_map,
     :param strip_comment_tags: a flag that if set to `True` causes all comment
                                tags to be removed from the collected comments.
     :param dirpath: the path to the directory to extract messages from.
+    :return: iterable of 5-tuples (filename, lineno, messages, comments, context)
+    :rtype: Iterable[tuple[str, int, str|tuple[str], list[str], str|None]
     """
     # filename is the relative path from dirpath to the actual file
     filename = relpath(filepath, dirpath)
@@ -215,8 +220,7 @@ def extract_from_file(method, filename, keywords=DEFAULT_KEYWORDS,
                       comment_tags=(), options=None, strip_comment_tags=False):
     """Extract messages from a specific file.
 
-    This function returns a list of tuples of the form ``(lineno, funcname,
-    message)``.
+    This function returns a list of tuples of the form ``(lineno, message, comments, context)``.
 
     :param filename: the path to the file to extract messages from
     :param method: a string specifying the extraction method (.e.g. "python")
@@ -229,13 +233,12 @@ def extract_from_file(method, filename, keywords=DEFAULT_KEYWORDS,
     :param strip_comment_tags: a flag that if set to `True` causes all comment
                                tags to be removed from the collected comments.
     :param options: a dictionary of additional options (optional)
+    :returns: list of tuples of the form ``(lineno, message, comments, context)``
+    :rtype: list[tuple[int, str|tuple[str], list[str], str|None]
     """
-    fileobj = open(filename, 'rb')
-    try:
+    with open(filename, 'rb') as fileobj:
         return list(extract(method, fileobj, keywords, comment_tags, options,
                             strip_comment_tags))
-    finally:
-        fileobj.close()
 
 
 def extract(method, fileobj, keywords=DEFAULT_KEYWORDS, comment_tags=(),
@@ -243,7 +246,7 @@ def extract(method, fileobj, keywords=DEFAULT_KEYWORDS, comment_tags=(),
     """Extract messages from the given file-like object using the specified
     extraction method.
 
-    This function returns tuples of the form ``(lineno, message, comments)``.
+    This function returns tuples of the form ``(lineno, message, comments, context)``.
 
     The implementation dispatches the actual extraction to plugins, based on the
     value of the ``method`` parameter.
@@ -276,6 +279,8 @@ def extract(method, fileobj, keywords=DEFAULT_KEYWORDS, comment_tags=(),
     :param strip_comment_tags: a flag that if set to `True` causes all comment
                                tags to be removed from the collected comments.
     :raise ValueError: if the extraction method is not registered
+    :returns: iterable of tuples of the form ``(lineno, message, comments, context)``
+    :rtype: Iterable[tuple[int, str|tuple[str], list[str], str|None]
     """
     func = None
     if callable(method):
@@ -398,7 +403,8 @@ def extract_python(fileobj, keywords, comment_tags, options):
     in_def = in_translator_comments = False
     comment_tag = None
 
-    encoding = parse_encoding(fileobj) or options.get('encoding', 'iso-8859-1')
+    encoding = parse_encoding(fileobj) or options.get('encoding', 'UTF-8')
+    future_flags = parse_future_flags(fileobj, encoding)
 
     if PY2:
         next_line = fileobj.readline
@@ -440,7 +446,8 @@ def extract_python(fileobj, keywords, comment_tags, options):
                     translator_comments.append((lineno, value))
                     break
         elif funcname and call_stack == 0:
-            if tok == OP and value == ')':
+            nested = (tok == NAME and value in keywords)
+            if (tok == OP and value == ')') or nested:
                 if buf:
                     messages.append(''.join(buf))
                     del buf[:]
@@ -465,13 +472,16 @@ def extract_python(fileobj, keywords, comment_tags, options):
                 messages = []
                 translator_comments = []
                 in_translator_comments = False
+                if nested:
+                    funcname = value
             elif tok == STRING:
                 # Unwrap quotes in a safe manner, maintaining the string's
                 # encoding
                 # https://sourceforge.net/tracker/?func=detail&atid=355470&
                 # aid=617979&group_id=5470
-                value = eval('# coding=%s\n%s' % (str(encoding), value),
-                             {'__builtins__': {}}, {})
+                code = compile('# coding=%s\n%s' % (str(encoding), value),
+                               '<string>', 'eval', future_flags)
+                value = eval(code, {'__builtins__': {}}, {})
                 if PY2 and not isinstance(value, text_type):
                     value = value.decode(encoding)
                 buf.append(value)

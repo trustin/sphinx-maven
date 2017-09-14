@@ -5,7 +5,7 @@
 
     Japanese search language: includes routine to split words.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -39,13 +39,19 @@ from sphinx.errors import SphinxError, ExtensionError
 from sphinx.search import SearchLanguage
 from sphinx.util import import_object
 
+if False:
+    # For type annotation
+    from typing import Any, Dict, List  # NOQA
+
 
 class BaseSplitter(object):
 
     def __init__(self, options):
+        # type: (Dict) -> None
         self.options = options
 
     def split(self, input):
+        # type: (unicode) -> List[unicode]
         """
 
         :param str input:
@@ -57,9 +63,10 @@ class BaseSplitter(object):
 
 class MecabSplitter(BaseSplitter):
     def __init__(self, options):
+        # type: (Dict) -> None
         super(MecabSplitter, self).__init__(options)
-        self.ctypes_libmecab = None
-        self.ctypes_mecab = None
+        self.ctypes_libmecab = None     # type: Any
+        self.ctypes_mecab = None        # type: Any
         if not native_module:
             self.init_ctypes(options)
         else:
@@ -67,6 +74,7 @@ class MecabSplitter(BaseSplitter):
         self.dict_encode = options.get('dic_enc', 'utf-8')
 
     def split(self, input):
+        # type: (unicode) -> List[unicode]
         input2 = input if PY3 else input.encode(self.dict_encode)
         if native_module:
             result = self.native.parse(input2)
@@ -79,6 +87,7 @@ class MecabSplitter(BaseSplitter):
             return result.decode(self.dict_encode).split(' ')
 
     def init_native(self, options):
+        # type: (Dict) -> None
         param = '-Owakati'
         dict = options.get('dict')
         if dict:
@@ -86,6 +95,7 @@ class MecabSplitter(BaseSplitter):
         self.native = MeCab.Tagger(param)
 
     def init_ctypes(self, options):
+        # type: (Dict) -> None
         import ctypes.util
 
         lib = options.get('lib')
@@ -122,6 +132,7 @@ class MecabSplitter(BaseSplitter):
             raise SphinxError('mecab initialization failed')
 
     def __del__(self):
+        # type: () -> None
         if self.ctypes_libmecab:
             self.ctypes_libmecab.mecab_destroy(self.ctypes_mecab)
 
@@ -130,17 +141,20 @@ MeCabBinder = MecabSplitter  # keep backward compatibility until Sphinx-1.6
 
 class JanomeSplitter(BaseSplitter):
     def __init__(self, options):
+        # type: (Dict) -> None
         super(JanomeSplitter, self).__init__(options)
         self.user_dict = options.get('user_dic')
         self.user_dict_enc = options.get('user_dic_enc', 'utf8')
         self.init_tokenizer()
 
     def init_tokenizer(self):
+        # type: () -> None
         if not janome_module:
             raise RuntimeError('Janome is not available')
         self.tokenizer = janome.tokenizer.Tokenizer(udic=self.user_dict, udic_enc=self.user_dict_enc)
 
     def split(self, input):
+        # type: (unicode) -> List[unicode]
         result = u' '.join(token.surface for token in self.tokenizer.tokenize(input))
         return result.split(u' ')
 
@@ -417,6 +431,7 @@ class DefaultSplitter(BaseSplitter):
 
     # ctype_
     def ctype_(self, char):
+        # type: (unicode) -> unicode
         for pattern, value in iteritems(self.patterns_):
             if pattern.match(char):
                 return value
@@ -424,12 +439,14 @@ class DefaultSplitter(BaseSplitter):
 
     # ts_
     def ts_(self, dict, key):
+        # type: (Dict[unicode, int], unicode) -> int
         if key in dict:
             return dict[key]
         return 0
 
     # segment
     def split(self, input):
+        # type: (unicode) -> List[unicode]
         if not input:
             return []
 
@@ -538,6 +555,7 @@ class SearchJapanese(SearchLanguage):
     }
 
     def init(self, options):
+        # type: (Dict) -> None
         type = options.get('type', 'default')
         if type in self.splitters:
             dotted_path = self.splitters[type]
@@ -550,10 +568,13 @@ class SearchJapanese(SearchLanguage):
                                  dotted_path)
 
     def split(self, input):
+        # type: (unicode) -> List[unicode]
         return self.splitter.split(input)
 
     def word_filter(self, stemmed_word):
+        # type: (unicode) -> bool
         return len(stemmed_word) > 1
 
     def stem(self, word):
+        # type: (unicode) -> unicode
         return word

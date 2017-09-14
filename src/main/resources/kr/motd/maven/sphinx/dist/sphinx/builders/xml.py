@@ -5,7 +5,7 @@
 
     Docutils-native XML and pseudo-XML builders.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -14,10 +14,19 @@ from os import path
 
 from docutils import nodes
 from docutils.io import StringOutput
+from docutils.writers.docutils_xml import XMLTranslator
 
 from sphinx.builders import Builder
+from sphinx.util import logging
 from sphinx.util.osutil import ensuredir, os_path
 from sphinx.writers.xml import XMLWriter, PseudoXMLWriter
+
+if False:
+    # For type annotation
+    from typing import Any, Dict, Iterator, Set  # NOQA
+    from sphinx.application import Sphinx  # NOQA
+
+logger = logging.getLogger(__name__)
 
 
 class XMLBuilder(Builder):
@@ -30,11 +39,14 @@ class XMLBuilder(Builder):
     allow_parallel = True
 
     _writer_class = XMLWriter
+    default_translator_class = XMLTranslator
 
     def init(self):
+        # type: () -> None
         pass
 
     def get_outdated_docs(self):
+        # type: () -> Iterator[unicode]
         for docname in self.env.found_docs:
             if docname not in self.env.all_docs:
                 yield docname
@@ -54,12 +66,15 @@ class XMLBuilder(Builder):
                 pass
 
     def get_target_uri(self, docname, typ=None):
+        # type: (unicode, unicode) -> unicode
         return docname
 
     def prepare_writing(self, docnames):
+        # type: (Set[unicode]) -> None
         self.writer = self._writer_class(self)
 
     def write_doc(self, docname, doctree):
+        # type: (unicode, nodes.Node) -> None
         # work around multiple string % tuple issues in docutils;
         # replace tuples in attribute values with lists
         doctree = doctree.deepcopy()
@@ -77,12 +92,13 @@ class XMLBuilder(Builder):
         outfilename = path.join(self.outdir, os_path(docname) + self.out_suffix)
         ensuredir(path.dirname(outfilename))
         try:
-            with codecs.open(outfilename, 'w', 'utf-8') as f:
+            with codecs.open(outfilename, 'w', 'utf-8') as f:  # type: ignore
                 f.write(self.writer.output)
         except (IOError, OSError) as err:
-            self.warn("error writing file %s: %s" % (outfilename, err))
+            logger.warning("error writing file %s: %s", outfilename, err)
 
     def finish(self):
+        # type: () -> None
         pass
 
 
@@ -98,6 +114,7 @@ class PseudoXMLBuilder(XMLBuilder):
 
 
 def setup(app):
+    # type: (Sphinx) -> Dict[unicode, Any]
     app.add_builder(XMLBuilder)
     app.add_builder(PseudoXMLBuilder)
 

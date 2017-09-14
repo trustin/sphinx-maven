@@ -20,12 +20,87 @@
 #  - http://www.unicode.org/reports/tr35/ (Appendix G.6)
 import re
 from datetime import date as date_, datetime as datetime_
+from itertools import chain
 
 from babel.core import default_locale, Locale, get_global
-from babel._compat import Decimal, InvalidOperation, ROUND_HALF_EVEN
+from babel._compat import decimal, string_types
+from babel.localedata import locale_identifiers
 
 
 LC_NUMERIC = default_locale('LC_NUMERIC')
+
+
+class UnknownCurrencyError(Exception):
+    """Exception thrown when a currency is requested for which no data is available.
+    """
+
+    def __init__(self, identifier):
+        """Create the exception.
+        :param identifier: the identifier string of the unsupported currency
+        """
+        Exception.__init__(self, 'Unknown currency %r.' % identifier)
+
+        #: The identifier of the locale that could not be found.
+        self.identifier = identifier
+
+
+def list_currencies(locale=None):
+    """ Return a `set` of normalized currency codes.
+
+    .. versionadded:: 2.5.0
+
+    :param locale: filters returned currency codes by the provided locale.
+                   Expected to be a locale instance or code. If no locale is
+                   provided, returns the list of all currencies from all
+                   locales.
+    """
+    # Get locale-scoped currencies.
+    if locale:
+        currencies = Locale.parse(locale).currencies.keys()
+    else:
+        currencies = get_global('all_currencies')
+    return set(currencies)
+
+
+def validate_currency(currency, locale=None):
+    """ Check the currency code is recognized by Babel.
+
+    Accepts a ``locale`` parameter for fined-grained validation, working as
+    the one defined above in ``list_currencies()`` method.
+
+    Raises a `ValueError` exception if the currency is unknown to Babel.
+    """
+    if currency not in list_currencies(locale):
+        raise UnknownCurrencyError(currency)
+
+
+def is_currency(currency, locale=None):
+    """ Returns `True` only if a currency is recognized by Babel.
+
+    This method always return a Boolean and never raise.
+    """
+    if not currency or not isinstance(currency, string_types):
+        return False
+    try:
+        validate_currency(currency, locale)
+    except UnknownCurrencyError:
+        return False
+    return True
+
+
+def normalize_currency(currency, locale=None):
+    """Returns the normalized sting of any currency code.
+
+    Accepts a ``locale`` parameter for fined-grained validation, working as
+    the one defined above in ``list_currencies()`` method.
+
+    Returns None if the currency is unknown to Babel.
+    """
+    if isinstance(currency, string_types):
+        currency = currency.upper()
+    if not is_currency(currency, locale):
+        return
+    return currency
 
 
 def get_currency_name(currency, count=None, locale=LC_NUMERIC):
@@ -36,10 +111,10 @@ def get_currency_name(currency, count=None, locale=LC_NUMERIC):
 
     .. versionadded:: 0.9.4
 
-    :param currency: the currency code
+    :param currency: the currency code.
     :param count: the optional count.  If provided the currency name
                   will be pluralized to that number if possible.
-    :param locale: the `Locale` object or locale identifier
+    :param locale: the `Locale` object or locale identifier.
     """
     loc = Locale.parse(locale)
     if count is not None:
@@ -56,10 +131,24 @@ def get_currency_symbol(currency, locale=LC_NUMERIC):
     >>> get_currency_symbol('USD', locale='en_US')
     u'$'
 
-    :param currency: the currency code
-    :param locale: the `Locale` object or locale identifier
+    :param currency: the currency code.
+    :param locale: the `Locale` object or locale identifier.
     """
     return Locale.parse(locale).currency_symbols.get(currency, currency)
+
+
+def get_currency_precision(currency):
+    """Return currency's precision.
+
+    Precision is the number of decimals found after the decimal point in the
+    currency's format pattern.
+
+    .. versionadded:: 2.5.0
+
+    :param currency: the currency code.
+    """
+    precisions = get_global('currency_fractions')
+    return precisions.get(currency, precisions['DEFAULT'])[0]
 
 
 def get_territory_currencies(territory, start_date=None, end_date=None,
@@ -102,7 +191,7 @@ def get_territory_currencies(territory, start_date=None, end_date=None,
 
     .. versionadded:: 2.0
 
-    :param territory: the name of the territory to find the currency fo
+    :param territory: the name of the territory to find the currency for.
     :param start_date: the start date.  If not given today is assumed.
     :param end_date: the end date.  If not given the start date is assumed.
     :param tender: controls whether tender currencies should be included.
@@ -326,12 +415,8 @@ def format_currency(number, currency, format=None, locale=LC_NUMERIC,
             raise UnknownCurrencyFormatError("%r is not a known currency format"
                                              " type" % format_type)
     if currency_digits:
-        fractions = get_global('currency_fractions')
-        try:
-            digits = fractions[currency][0]
-        except KeyError:
-            digits = fractions['DEFAULT'][0]
-        frac = (digits, digits)
+        precision = get_currency_precision(currency)
+        frac = (precision, precision)
     else:
         frac = None
     return pattern.apply(number, locale, currency=currency, force_frac=frac)
@@ -437,9 +522,9 @@ def parse_decimal(string, locale=LC_NUMERIC):
     """
     locale = Locale.parse(locale)
     try:
-        return Decimal(string.replace(get_group_symbol(locale), '')
-                       .replace(get_decimal_symbol(locale), '.'))
-    except InvalidOperation:
+        return decimal.Decimal(string.replace(get_group_symbol(locale), '')
+                               .replace(get_decimal_symbol(locale), '.'))
+    except decimal.InvalidOperation:
         raise NumberFormatError('%r is not a valid decimal number' % string)
 
 
@@ -487,13 +572,15 @@ def parse_pattern(pattern):
             raise ValueError('Invalid number pattern %r' % pattern)
         return rv.groups()
 
+    pos_pattern = pattern
+
     # Do we have a negative subpattern?
     if ';' in pattern:
-        pattern, neg_pattern = pattern.split(';', 1)
-        pos_prefix, number, pos_suffix = _match_number(pattern)
+        pos_pattern, neg_pattern = pattern.split(';', 1)
+        pos_prefix, number, pos_suffix = _match_number(pos_pattern)
         neg_prefix, _, neg_suffix = _match_number(neg_pattern)
     else:
-        pos_prefix, number, pos_suffix = _match_number(pattern)
+        pos_prefix, number, pos_suffix = _match_number(pos_pattern)
         neg_prefix = '-' + pos_prefix
         neg_suffix = pos_suffix
     if 'E' in number:
@@ -566,8 +653,8 @@ class NumberPattern(object):
 
     def apply(self, value, locale, currency=None, force_frac=None):
         frac_prec = force_frac or self.frac_prec
-        if not isinstance(value, Decimal):
-            value = Decimal(str(value))
+        if not isinstance(value, decimal.Decimal):
+            value = decimal.Decimal(str(value))
         value = value.scaleb(self.scale)
         is_negative = int(value.is_signed())
         if self.exp_prec:  # Scientific notation
@@ -603,8 +690,8 @@ class NumberPattern(object):
             if sep:
                 number += get_decimal_symbol(locale) + b
         else:  # A normal number pattern
-            precision = Decimal('1.' + '1' * frac_prec[1])
-            rounded = value.quantize(precision, ROUND_HALF_EVEN)
+            precision = decimal.Decimal('1.' + '1' * frac_prec[1])
+            rounded = value.quantize(precision)
             a, sep, b = str(abs(rounded)).partition(".")
             number = (self._format_int(a, self.int_prec[0],
                                        self.int_prec[1], locale) +
@@ -641,7 +728,7 @@ class NumberPattern(object):
     def _format_significant(self, value, minimum, maximum):
         exp = value.adjusted()
         scale = maximum - 1 - exp
-        digits = str(value.scaleb(scale).quantize(Decimal(1), ROUND_HALF_EVEN))
+        digits = str(value.scaleb(scale).quantize(decimal.Decimal(1)))
         if scale <= 0:
             result = digits + '0' * -scale
         else:

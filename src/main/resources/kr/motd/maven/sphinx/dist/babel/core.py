@@ -45,6 +45,7 @@ def get_global(key):
 
     The keys available are:
 
+    - ``all_currencies``
     - ``currency_fractions``
     - ``language_aliases``
     - ``likely_subtags``
@@ -55,7 +56,7 @@ def get_global(key):
     - ``territory_languages``
     - ``territory_zones``
     - ``variant_aliases``
-    - ``win_mapping``
+    - ``windows_zone_mapping``
     - ``zone_aliases``
     - ``zone_territories``
 
@@ -67,15 +68,12 @@ def get_global(key):
     """
     global _global_data
     if _global_data is None:
-        dirname = os.path.join(os.path.dirname(__file__))
+        dirname = localedata.get_base_dir()
         filename = os.path.join(dirname, 'global.dat')
         if not os.path.isfile(filename):
             _raise_no_data_error()
-        fileobj = open(filename, 'rb')
-        try:
+        with open(filename, 'rb') as fileobj:
             _global_data = pickle.load(fileobj)
-        finally:
-            fileobj.close()
     return _global_data.get(key, {})
 
 
@@ -265,7 +263,7 @@ class Locale(object):
         elif isinstance(identifier, Locale):
             return identifier
         elif not isinstance(identifier, string_types):
-            raise TypeError('Unxpected value for identifier: %r' % (identifier,))
+            raise TypeError('Unexpected value for identifier: %r' % (identifier,))
 
         parts = parse_locale(identifier, sep=sep)
         input_id = get_locale_identifier(parts)
@@ -577,7 +575,7 @@ class Locale(object):
         >>> Locale('en', 'US').currency_formats['standard']
         <NumberPattern u'\\xa4#,##0.00'>
         >>> Locale('en', 'US').currency_formats['accounting']
-        <NumberPattern u'\\xa4#,##0.00'>
+        <NumberPattern u'\\xa4#,##0.00;(\\xa4#,##0.00)'>
         """
         return self._data['currency_formats']
 

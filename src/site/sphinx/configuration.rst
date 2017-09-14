@@ -71,6 +71,39 @@ You will need to add some additional configuration options to your ``conf.py`` f
 Please note that it is absolutely necessary that the environment variable's value is assigned to the variable
 *plantuml*, so that the extension works as expected.
 
+Using inline syntax highlighting
+================================
+
+.. highlight:: rst
+
+.. role:: python(code)
+    :language: python
+
+.. role:: latex(code)
+    :language: latex
+
+You can use this extension as follows::
+
+    .. highlight:: rst
+
+    .. role:: python(code)
+        :language: python
+
+    .. role:: latex(code)
+        :language: latex
+
+    Now here are latex command :latex:`\\setlength` and python command
+    :python:`import`, created by ``:python:`import```.  Here is a
+    :literal:`literal`, which stays a literal, and
+    :code:`.. highlight:: rst` makes code role look as it looks.
+
+Which is rendered as follows:
+
+    Now here are latex command :latex:`\\setlength` and python command
+    :python:`import`, created by ``:python:`import```.  Here is a
+    :literal:`literal`, which stays a literal, and
+    :code:`.. highlight:: rst` makes code role look as it looks.
+
 A note on memory usage
 ======================
 Sphinx is run via `Jython`_ which will generate lots of small classes for various Python constructs. This means
@@ -104,7 +137,8 @@ documentation is given below:
   pygments_style = 'tango'
   add_function_parentheses = True
 
-  extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml', 'javasphinx']
+  extensions = ['sphinx.ext.autodoc', 'javasphinx',
+                'sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.plantuml']
   templates_path = ['_templates']
   exclude_trees = ['.build']
   source_suffix = ['.rst', '.md']
@@ -118,7 +152,6 @@ documentation is given below:
   html_short_title = "my-project"
   htmlhelp_basename = 'my-project-doc'
   html_use_index = True
-  html_use_smartypants = True
   html_show_sourcelink = False
   html_static_path = ['_static']
 

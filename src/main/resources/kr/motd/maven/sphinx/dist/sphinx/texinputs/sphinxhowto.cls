@@ -3,7 +3,7 @@
 %
 
 \NeedsTeXFormat{LaTeX2e}[1995/12/01]
-\ProvidesClass{sphinxhowto}[2016/10/12 v1.5 Document class (Sphinx HOWTO)]
+\ProvidesClass{sphinxhowto}[2017/03/26 v1.6 Document class (Sphinx HOWTO)]
 
 % 'oneside' option overriding the 'twoside' default
 \newif\if@oneside
@@ -30,20 +30,12 @@
 % ``Bjarne'' style a bit better.
 %
 \renewcommand{\maketitle}{%
-  \noindent\rule{\textwidth}{1pt}\ifsphinxpdfoutput\newline\null\fi\par
-  \ifsphinxpdfoutput
-    \begingroup
-    % These \defs are required to deal with multi-line authors; it
-    % changes \\ to ', ' (comma-space), making it pass muster for
-    % generating document info in the PDF file.
-    \def\\{, }%
-    \def\and{and }%
-    \pdfinfo{
-      /Author (\@author)
-      /Title (\@title)
-    }%
+  \noindent\rule{\textwidth}{1pt}\par
+    \begingroup % for PDF information dictionary
+       \def\endgraf{ }\def\and{\& }%
+       \pdfstringdefDisableCommands{\def\\{, }}% overwrite hyperref setup
+       \hypersetup{pdfauthor={\@author}, pdftitle={\@title}}%
     \endgroup
-  \fi
   \begin{flushright}
     \sphinxlogo
     \py@HeaderFamily
@@ -85,10 +77,8 @@
 % For an article document class this environment is a section,
 % so no page break before it.
 %
-% Note: \phantomsection is required for TeXLive 2009
-% http://tex.stackexchange.com/questions/44088/when-do-i-need-to-invoke-phantomsection#comment166081_44091
 \newenvironment{sphinxthebibliography}[1]{%
-  \phantomsection
+  % \phantomsection % not needed here since TeXLive 2010's hyperref
   \begin{thebibliography}{1}%
   \addcontentsline{toc}{section}{\ifdefined\refname\refname\else\ifdefined\bibname\bibname\fi\fi}}{\end{thebibliography}}
 
@@ -99,6 +89,6 @@
 \@ifclassloaded{memoir}
  {\newenvironment{sphinxtheindex}{\begin{theindex}}{\end{theindex}}}
  {\newenvironment{sphinxtheindex}{%
-    \phantomsection
+    \phantomsection % needed because no chapter, section, ... is created by theindex
     \begin{theindex}%
     \addcontentsline{toc}{section}{\indexname}}{\end{theindex}}}

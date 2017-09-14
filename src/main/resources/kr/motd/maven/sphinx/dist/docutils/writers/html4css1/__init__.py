@@ -1,4 +1,4 @@
-# $Id: __init__.py 7977 2016-11-29 12:00:39Z milde $
+# $Id: __init__.py 8035 2017-02-13 22:01:47Z milde $
 # Author: David Goodger
 # Maintainer: docutils-develop@lists.sourceforge.net
 # Copyright: This module has been placed in the public domain.
@@ -247,6 +247,29 @@ class HTMLTranslator(writers._html_base.HTMLTranslator):
     def depart_authors(self, node):
         self.depart_docinfo_item()
 
+    # use "width" argument insted of "style: 'width'":
+    def visit_colspec(self, node):
+        self.colspecs.append(node)
+        # "stubs" list is an attribute of the tgroup element:
+        node.parent.stubs.append(node.attributes.get('stub'))
+    #
+    def depart_colspec(self, node):
+        # write out <colgroup> when all colspecs are processed
+        if isinstance(node.next_node(descend=False, siblings=True),
+                      nodes.colspec):
+            return
+        if 'colwidths-auto' in node.parent.parent['classes'] or (
+            'colwidths-auto' in self.settings.table_style and
+            ('colwidths-given' not in node.parent.parent['classes'])):
+            return
+        total_width = sum(node['colwidth'] for node in self.colspecs)
+        self.body.append(self.starttag(node, 'colgroup'))
+        for node in self.colspecs:
+            colwidth = int(node['colwidth'] * 100.0 / total_width + 0.5)
+            self.body.append(self.emptytag(node, 'col',
+                                           width='%i%%' % colwidth))
+        self.body.append('</colgroup>\n')
+
     # Compact lists:
     # exclude definition lists and field lists (non-compact by default)
 
@@ -277,20 +300,6 @@ class HTMLTranslator(writers._html_base.HTMLTranslator):
     def visit_classifier(self, node):
         self.body.append(' <span class="classifier-delimiter">:</span> ')
         self.body.append(self.starttag(node, 'span', '', CLASS='classifier'))
-
-    # rewritten in _html_base (support for "auto" width)
-    def depart_colspec(self, node):
-        pass
-
-    def write_colspecs(self):
-        width = 0
-        for node in self.colspecs:
-            width += node['colwidth']
-        for node in self.colspecs:
-            colwidth = int(node['colwidth'] * 100.0 / width + 0.5)
-            self.body.append(self.emptytag(node, 'col',
-                                           width='%i%%' % colwidth))
-        self.colspecs = []
 
     # ersatz for first/last pseudo-classes
     def visit_definition(self, node):
@@ -556,7 +565,7 @@ class HTMLTranslator(writers._html_base.HTMLTranslator):
             if token.strip():
                 # Protect text like "--an-option" and the regular expression
                 # ``[+]?(\d+(\.\d*)?|\.\d+)`` from bad line wrapping
-                if self.sollbruchstelle.search(token):
+                if self.in_word_wrap_point.search(token):
                     self.body.append('<span class="pre">%s</span>'
                                      % self.encode(token))
                 else:
@@ -761,24 +770,17 @@ class HTMLTranslator(writers._html_base.HTMLTranslator):
 
     # hard-coded vertical alignment
     def visit_tbody(self, node):
-        self.write_colspecs()
-        self.body.append(self.context.pop()) # '</colgroup>\n' or ''
         self.body.append(self.starttag(node, 'tbody', valign='top'))
+    #
+    def depart_tbody(self, node):
+        self.body.append('</tbody>\n')
 
-    # rewritten in _html_base
-    def visit_tgroup(self, node):
-        self.body.append(self.starttag(node, 'colgroup'))
-        # Appended by thead or tbody:
-        self.context.append('</colgroup>\n')
-        node.stubs = []
-
-    # rewritten in _html_base
+    # hard-coded vertical alignment
     def visit_thead(self, node):
-        self.write_colspecs()
-        self.body.append(self.context.pop()) # '</colgroup>\n'
-        # There may or may not be a <thead>; this is for <tbody> to use:
-        self.context.append('')
         self.body.append(self.starttag(node, 'thead', valign='bottom'))
+    #
+    def depart_thead(self, node):
+        self.body.append('</thead>\n')
 
 
 class SimpleListChecker(writers._html_base.SimpleListChecker):

@@ -1,7 +1,7 @@
 /* Minimal style sheet for the HTML output of Docutils.                    */
 /*                                                                         */
 /* :Author: Günter Milde, based on html4css1.css by David Goodger          */
-/* :Id: $Id: minimal.css 7952 2016-07-26 18:15:59Z milde $               */
+/* :Id: $Id: minimal.css 8036 2017-02-14 13:05:46Z milde $               */
 /* :Copyright: © 2015 Günter Milde.                                        */
 /* :License: Released under the terms of the `2-Clause BSD license`_,      */
 /*    in short:                                                            */
@@ -204,7 +204,7 @@ table.align-right {
   margin-left: auto;
 }
 /* reset inner alignment in figures and tables */
-div.align-left, div.align-center, div.align-right,
+/* div.align-left, div.align-center, div.align-right, */
 table.align-left, table.align-center, table.align-right
 { text-align: inherit }
 

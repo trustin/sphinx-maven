@@ -10,7 +10,7 @@
 
 {# set up admonition styling #}
 {# - basic level #}
-{% set admonition_xref_bg = theme_admonition_xref_bg or theme_xref_bg %}
+{% set theme_admonition_xref_bg = theme_admonition_xref_bg or theme_xref_bg %}
 {% set theme_admonition_bg = theme_admonition_bg or theme_gray_2 %}
 {% set theme_note_bg = theme_note_bg or theme_gray_2 %}
 {% set theme_seealso_bg = theme_seealso_bg or theme_gray_2 %}
@@ -276,11 +276,6 @@ div.admonition tt.xref, div.admonition code.xref, div.admonition a tt {
     border-bottom: 1px solid {{ theme_admonition_xref_border }};
 }
 
-dd div.admonition {
-    margin-left: -60px;
-    padding-left: 60px;
-}
-
 div.admonition p.admonition-title {
     font-family: {{ theme_head_font_family }};
     font-weight: normal;
@@ -443,6 +438,16 @@ table.field-list p {
     margin-bottom: 0.8em;
 }
 
+/* Cloned from
+ * https://github.com/sphinx-doc/sphinx/commit/ef60dbfce09286b20b7385333d63a60321784e68
+ */
+.field-name {
+    -moz-hyphens: manual;
+    -ms-hyphens: manual;
+    -webkit-hyphens: manual;
+    hyphens: manual;
+}
+
 table.footnote td.label {
     width: .1px;
     padding: 0.3em 0 0.3em 0.5em;
@@ -486,11 +491,6 @@ div.viewcode-block:target {
 dl pre, blockquote pre, li pre {
     margin-left: 0;
     padding-left: 30px;
-}
-
-dl dl pre {
-    margin-left: -90px;
-    padding-left: 90px;
 }
 
 tt, code {

@@ -5,7 +5,7 @@
 
     Format colored console output.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -19,11 +19,17 @@ try:
 except ImportError:
     colorama = None
 
+if False:
+    # For type annotation
+    from typing import Dict  # NOQA
+
+
 _ansi_re = re.compile('\x1b\\[(\\d\\d;){0,2}\\d\\dm')
-codes = {}
+codes = {}  # type: Dict[str, str]
 
 
 def get_terminal_width():
+    # type: () -> int
     """Borrowed from the py lib."""
     try:
         import termios
@@ -35,7 +41,7 @@ def get_terminal_width():
         terminal_width = width
     except Exception:
         # FALLBACK
-        terminal_width = int(os.environ.get('COLUMNS', 80)) - 1
+        terminal_width = int(os.environ.get('COLUMNS', "80")) - 1
     return terminal_width
 
 
@@ -43,6 +49,7 @@ _tw = get_terminal_width()
 
 
 def term_width_line(text):
+    # type: (str) -> str
     if not codes:
         # if no coloring, don't output fancy backspaces
         return text + '\n'
@@ -52,6 +59,7 @@ def term_width_line(text):
 
 
 def color_terminal():
+    # type: () -> bool
     if sys.platform == 'win32' and colorama is not None:
         colorama.init()
         return True
@@ -68,25 +76,31 @@ def color_terminal():
 
 
 def nocolor():
+    # type: () -> None
     if sys.platform == 'win32' and colorama is not None:
         colorama.deinit()
     codes.clear()
 
 
 def coloron():
+    # type: () -> None
     codes.update(_orig_codes)
 
 
 def colorize(name, text):
+    # type: (str, unicode) -> unicode
     return codes.get(name, '') + text + codes.get('reset', '')
 
 
 def strip_colors(s):
+    # type: (str) -> str
     return re.compile('\x1b.*?m').sub('', s)
 
 
 def create_color_func(name):
+    # type: (str) -> None
     def inner(text):
+        # type: (unicode) -> unicode
         return colorize(name, text)
     globals()[name] = inner
 

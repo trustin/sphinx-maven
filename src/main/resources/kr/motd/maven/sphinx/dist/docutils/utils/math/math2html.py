@@ -4101,7 +4101,7 @@ class FormulaCommand(FormulaBit):
 
   def emptycommand(self, pos):
     """Check for an empty command: look for command disguised as ending.
-    Special case against '{ \{ \} }' situation."""
+    Special case against '{ \\{ \\} }' situation."""
     command = ''
     if not pos.isout():
       ending = pos.nextending()
@@ -4560,7 +4560,7 @@ class EquationEnvironment(MultiRowFormula):
     self.parserows(pos)
 
 class BeginCommand(CommandBit):
-  "A \\begin{}...\end command and what it entails (array, cases, aligned)"
+  "A \\begin{}...\\end command and what it entails (array, cases, aligned)"
 
   commandmap = {FormulaConfig.array['begin']:''}
 

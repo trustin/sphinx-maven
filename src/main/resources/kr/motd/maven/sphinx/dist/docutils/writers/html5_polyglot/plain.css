@@ -2,7 +2,7 @@
 /* Rules for easy reading and pre-defined style variants.		   */
 /*                                                                         */
 /* :Author: Günter Milde, based on html4css1.css by David Goodger          */
-/* :Id: $Id: plain.css 7952 2016-07-26 18:15:59Z milde $               */
+/* :Id: $Id: plain.css 8120 2017-06-22 21:02:40Z milde $               */
 /* :Copyright: © 2015 Günter Milde.                                        */
 /* :License: Released under the terms of the `2-Clause BSD license`_,      */
 /*    in short:                                                            */
@@ -66,9 +66,9 @@ dl > dd {
 
 /* Definition Lists         */
 
-dl > dd p:first-child { margin-top: 0; }
+dl > dd > p:first-child { margin-top: 0; }
 /* :last-child is not part of CSS 2.1 (introduced in CSS 3) */
-/* dl > dd p:last-child  { margin-bottom: 0; } */
+dl > dd > p:last-child  { margin-bottom: 0; }
 
 /* lists nested in definition lists */
 /* :only-child is not part of CSS 2.1 (introduced in CSS 3) */

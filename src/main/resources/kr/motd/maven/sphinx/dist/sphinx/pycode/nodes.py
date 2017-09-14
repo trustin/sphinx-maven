@@ -5,16 +5,20 @@
 
     Parse tree node implementations.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+
+if False:
+    # For type annotation
+    from typing import Callable  # NOQA
 
 
 class BaseNode(object):
     """
     Node superclass for both terminal and nonterminal nodes.
     """
-    parent = None
+    parent = None  # type: BaseNode
 
     def _eq(self, other):
         raise NotImplementedError
@@ -29,7 +33,7 @@ class BaseNode(object):
             return NotImplemented
         return not self._eq(other)
 
-    __hash__ = None
+    __hash__ = None  # type: Callable[[object], int]
 
     def get_prev_sibling(self):
         """Return previous child in parent's children, or None."""
@@ -204,5 +208,5 @@ class NodeVisitor(object):
     def generic_visit(self, node):
         """Called if no explicit visitor function exists for a node."""
         if isinstance(node, Node):
-            for child in node:
+            for child in node:  # type: ignore
                 self.visit(child)

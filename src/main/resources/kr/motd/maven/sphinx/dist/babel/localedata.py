@@ -16,13 +16,23 @@ import os
 import threading
 from collections import MutableMapping
 from itertools import chain
+import sys
 
 from babel._compat import pickle
 
 
+def get_base_dir():
+    if getattr(sys, 'frozen', False):
+        # we are running in a |PyInstaller| bundle
+        basedir = sys._MEIPASS
+    else:
+        # we are running in a normal Python environment
+        basedir = os.path.dirname(__file__)
+    return basedir
+
 _cache = {}
 _cache_lock = threading.RLock()
-_dirname = os.path.join(os.path.dirname(__file__), 'locale-data')
+_dirname = os.path.join(get_base_dir(), 'locale-data')
 
 
 def normalize_locale(name):
@@ -106,15 +116,12 @@ def load(name, merge_inherited=True):
                         parent = '_'.join(parts[:-1])
                 data = load(parent).copy()
             filename = os.path.join(_dirname, '%s.dat' % name)
-            fileobj = open(filename, 'rb')
-            try:
+            with open(filename, 'rb') as fileobj:
                 if name != 'root' and merge_inherited:
                     merge(data, pickle.load(fileobj))
                 else:
                     data = pickle.load(fileobj)
-                _cache[name] = data
-            finally:
-                fileobj.close()
+            _cache[name] = data
         return data
     finally:
         _cache_lock.release()

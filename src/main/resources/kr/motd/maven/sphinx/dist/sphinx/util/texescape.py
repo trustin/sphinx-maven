@@ -5,7 +5,7 @@
 
     TeX escaping helper.
 
-    :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
@@ -40,12 +40,9 @@ tex_replacements = [
     # used to separate -- in options
     ('﻿', r'{}'),
     # map some special Unicode characters to similar ASCII ones
-    ('─', r'-'),
     ('⎽', r'\_'),
-    ('╲', r'\textbackslash{}'),
     ('–', r'\textendash{}'),
     ('|', r'\textbar{}'),
-    ('│', r'\textbar{}'),
     ('ℯ', r'e'),
     ('ⅈ', r'i'),
     ('⁰', r'\(\sp{\text{0}}\)'),
@@ -126,6 +123,7 @@ tex_hl_escape_map_new = {}
 
 
 def init():
+    # type: () -> None
     for a, b in tex_replacements:
         tex_escape_map[ord(a)] = b
         tex_replace_map[ord(a)] = '_'

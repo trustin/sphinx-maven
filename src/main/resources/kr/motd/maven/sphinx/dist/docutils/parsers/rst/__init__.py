@@ -1,4 +1,4 @@
-# $Id: __init__.py 7961 2016-07-28 22:02:47Z milde $
+# $Id: __init__.py 8068 2017-05-08 22:10:39Z milde $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -141,11 +141,17 @@ class Parser(docutils.parsers.Parser):
          ('Change straight quotation marks to typographic form: '
           'one of "yes", "no", "alt[ernative]" (default "no").',
           ['--smart-quotes'],
-          {'default': False, 'validator': frontend.validate_ternary}),
+          {'default': False, 'metavar': '<yes/no/alt>',
+           'validator': frontend.validate_ternary}),
+         ('Characters to use as "smart quotes" for <language>. ',
+          ['--smartquotes-locales'],
+          {'metavar': '<language:quotes[,language:quotes,...]>',
+           'action': 'append',
+           'validator': frontend.validate_smartquotes_locales}),
          ('Inline markup recognized at word boundaries only '
           '(adjacent to punctuation or whitespace). '
           'Force character-level inline markup recognition with '
-          '"\ " (backslash + space). Default.',
+          '"\\ " (backslash + space). Default.',
           ['--word-level-inline-markup'],
           {'action': 'store_false', 'dest': 'character_level_inline_markup'}),
          ('Inline markup recognized anywhere, regardless of surrounding '

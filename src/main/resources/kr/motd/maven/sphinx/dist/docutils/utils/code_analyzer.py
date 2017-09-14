@@ -4,7 +4,7 @@
 """Lexical analysis of formal languages (i.e. code) using Pygments."""
 
 # :Author: Georg Brandl; Felix Wiemann; Günter Milde
-# :Date: $Date: 2015-04-20 16:05:27 +0200 (Mo, 20. Apr 2015) $
+# :Date: $Date: 2015-04-20 16:05:27 +0200 (Mo, 20 Apr 2015) $
 # :Copyright: This module has been placed in the public domain.
 
 from docutils import ApplicationError

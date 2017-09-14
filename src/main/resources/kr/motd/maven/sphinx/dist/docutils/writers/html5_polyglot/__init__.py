@@ -1,9 +1,8 @@
 # .. coding: utf8
+# $Id: __init__.py 8041 2017-03-01 11:02:33Z milde $
 # :Author: Günter Milde <milde@users.sf.net>
 #          Based on the html4css1 writer by David Goodger.
 # :Maintainer: docutils-develop@lists.sourceforge.net
-# :Revision: $Revision: 7977 $
-# :Date: $Date: 2005-06-28$
 # :Copyright: © 2005, 2009, 2015 Günter Milde,
 #             portions from html4css1 © David Goodger.
 # :License: Released under the terms of the `2-Clause BSD license`_, in short:
@@ -21,7 +20,7 @@
 """
 Plain HyperText Markup Language document tree Writer.
 
-The output conforms to the `HTML 5` specification.
+The output conforms to the `HTML5` specification.
 
 The cascading style sheet "minimal.css" is required for proper viewing,
 the style sheet "plain.css" improves reading experience.
@@ -139,7 +138,7 @@ class Writer(writers._html_base.Writer):
           ['--cloak-email-addresses'],
           {'action': 'store_true', 'validator': frontend.validate_boolean}),))
 
-    config_section = 'html-plain writer'
+    config_section = 'html5 writer'
 
     def __init__(self):
         self.parts = {}
@@ -148,37 +147,46 @@ class Writer(writers._html_base.Writer):
 
 class HTMLTranslator(writers._html_base.HTMLTranslator):
     """
-    This writer generates `polyglot markup`: HTML 5 that is also valid XML.
-    """
-    # def __init__(self, document):
-    #     writers._html_base.HTMLTranslator.__init__(self, document)
+    This writer generates `polyglot markup`: HTML5 that is also valid XML.
 
+    Safe subclassing: when overriding, treat ``visit_*`` and ``depart_*``
+    methods as a unit to prevent breaks due to internal changes. See the
+    docstring of docutils.writers._html_base.HTMLTranslator for details
+    and examples.
+    """
 
     # <acronym> tag not supported in HTML5. Use the <abbr> tag instead.
     def visit_acronym(self, node):
         # @@@ implementation incomplete ("title" attribute)
         self.body.append(self.starttag(node, 'abbr', ''))
-
     def depart_acronym(self, node):
         self.body.append('</abbr>')
 
-    # no meta tag in HTML 5
+    # no meta tag in HTML5
     def visit_authors(self, node):
         self.visit_docinfo_item(node, 'authors', meta=False)
+    def depart_authors(self, node):
+        self.depart_docinfo_item()
 
+    # no meta tag in HTML5
     def visit_copyright(self, node):
         self.visit_docinfo_item(node, 'copyright', meta=False)
+    def depart_copyright(self, node):
+        self.depart_docinfo_item()
 
-    # no meta tag in HTML 5
+    # no meta tag in HTML5
     def visit_date(self, node):
         self.visit_docinfo_item(node, 'date', meta=False)
+    def depart_date(self, node):
+        self.depart_docinfo_item()
 
-    # TODO: use HTML 5 <footer> element?
+    # TODO: use HTML5 <footer> element?
     # def visit_footer(self, node):
     # def depart_footer(self, node):
 
     # TODO: use the new HTML5 element <aside>? (Also for footnote text)
     # def visit_footnote(self, node):
+    # def depart_footnote(self, node):
 
     # Meta tags: 'lang' attribute replaced by 'xml:lang' in XHTML 1.1
     # HTML5/polyglot recommends using both
@@ -188,13 +196,19 @@ class HTMLTranslator(writers._html_base.HTMLTranslator):
             # del(node['lang'])
         meta = self.emptytag(node, 'meta', **node.non_default_attributes())
         self.add_meta(meta)
+    def depart_meta(self, node):
+        pass
 
-    # no meta tag in HTML 5
+    # no meta tag in HTML5
     def visit_organization(self, node):
         self.visit_docinfo_item(node, 'organization', meta=False)
+    def depart_organization(self, node):
+        self.depart_docinfo_item()
 
-    # TODO: use the new HTML 5 element <section>?
+    # TODO: use the new HTML5 element <section>?
     # def visit_section(self, node):
+    # def depart_section(self, node):
 
     # TODO: use the new HTML5 element <aside>?
     # def visit_topic(self, node):
+    # def depart_topic(self, node):

@@ -1,4 +1,4 @@
-# $Id: states.py 7958 2016-07-28 21:52:14Z milde $
+# $Id: states.py 8060 2017-04-19 20:00:04Z milde $
 # Author: David Goodger <goodger@python.org>
 # Copyright: This module has been placed in the public domain.
 
@@ -117,6 +117,7 @@ from docutils.parsers.rst import directives, languages, tableparser, roles
 from docutils.parsers.rst.languages import en as _fallback_language_module
 from docutils.utils import escape2null, unescape, column_width
 from docutils.utils import punctuation_chars, roman, urischemes
+from docutils.utils import split_escaped_whitespace
 
 class MarkupError(DataError): pass
 class UnknownInterpretedRoleError(DataError): pass
@@ -463,11 +464,13 @@ class Inliner:
     """
 
     def __init__(self):
-        pass
+        self.implicit_dispatch = []
+        """List of (pattern, bound method) tuples, used by
+        `self.implicit_inline`."""
 
     def init_customizations(self, settings):
         # lookahead and look-behind expressions for inline markup rules
-        if settings.character_level_inline_markup:
+        if getattr(settings, 'character_level_inline_markup', False):
             start_string_prefix = u'(^|(?<!\x00))'
             end_string_suffix = u''
         else:
@@ -478,7 +481,6 @@ class Inliner:
                                  (punctuation_chars.closing_delimiters,
                                   punctuation_chars.delimiters,
                                   punctuation_chars.closers))
-
         args = locals().copy()
         args.update(vars(self.__class__))
 
@@ -508,6 +510,9 @@ class Inliner:
              )
             ]
            )
+        self.start_string_prefix = start_string_prefix
+        self.end_string_suffix = end_string_suffix
+        self.parts = parts
 
         self.patterns = Struct(
           initial=build_regexp(parts),
@@ -540,12 +545,12 @@ class Inliner:
               $                         # end of string
               """ % args, re.VERBOSE | re.UNICODE),
           literal=re.compile(self.non_whitespace_before + '(``)'
-                             + end_string_suffix),
+                             + end_string_suffix, re.UNICODE),
           target=re.compile(self.non_whitespace_escape_before
-                            + r'(`)' + end_string_suffix),
+                            + r'(`)' + end_string_suffix, re.UNICODE),
           substitution_ref=re.compile(self.non_whitespace_escape_before
                                       + r'(\|_{0,2})'
-                                      + end_string_suffix),
+                                      + end_string_suffix, re.UNICODE),
           email=re.compile(self.email_pattern % args + '$',
                            re.VERBOSE | re.UNICODE),
           uri=re.compile(
@@ -595,10 +600,8 @@ class Inliner:
                 (RFC(-|\s+)?(?P<rfcnum>\d+))
                 %(end_string_suffix)s""" % args, re.VERBOSE | re.UNICODE))
 
-        self.implicit_dispatch = [(self.patterns.uri, self.standalone_uri),]
-        """List of (pattern, bound method) tuples, used by
-        `self.implicit_inline`."""
-
+        self.implicit_dispatch.append((self.patterns.uri,
+                                       self.standalone_uri))
         if settings.pep_references:
             self.implicit_dispatch.append((self.patterns.pep,
                                            self.pep_reference))
@@ -656,12 +659,11 @@ class Inliner:
 
     # Inline object recognition
     # -------------------------
-    # print start_string_prefix.encode('utf8')
-    # TODO: support non-ASCII whitespace in the following 4 patterns?
-    non_whitespace_before = r'(?<![ \n])'
-    non_whitespace_escape_before = r'(?<![ \n\x00])'
-    non_unescaped_whitespace_escape_before = r'(?<!(?<!\x00)[ \n\x00])'
-    non_whitespace_after = r'(?![ \n])'
+    # See also init_customizations().
+    non_whitespace_before = r'(?<!\s)'
+    non_whitespace_escape_before = r'(?<![\s\x00])'
+    non_unescaped_whitespace_escape_before = r'(?<!(?<!\x00)[\s\x00])'
+    non_whitespace_after = r'(?!\s)'
     # Alphanumerics with isolated internal [-._+:] chars (i.e. not 2 together):
     simplename = r'(?:(?!_)\w)+(?:[-._+:](?:(?!_)\w)+)*'
     # Valid URI characters (see RFC 2396 & RFC 2732);
@@ -807,7 +809,9 @@ class Inliner:
                 target.indirect_reference_name = aliastext[:-1]
             else:
                 aliastype = 'uri'
-                alias = ''.join(aliastext.split())
+                alias_parts = split_escaped_whitespace(match.group(2))
+                alias = ' '.join(''.join(unescape(part).split())
+                                 for part in alias_parts)
                 alias = self.adjust_uri(alias)
                 if alias.endswith(r'\_'):
                     alias = alias[:-2] + '_'
@@ -1767,8 +1771,10 @@ class Body(RSTState):
     def build_table(self, tabledata, tableline, stub_columns=0, widths=None):
         colwidths, headrows, bodyrows = tabledata
         table = nodes.table()
-        if widths:
-            table['classes'] += ['colwidths-%s' % widths]
+        if widths == 'auto':
+            table['classes'] += ['colwidths-auto']
+        elif widths: # "grid" or list of integers
+            table['classes'] += ['colwidths-given']
         tgroup = nodes.tgroup(cols=len(colwidths))
         table += tgroup
         for colwidth in colwidths:
@@ -1958,8 +1964,10 @@ class Body(RSTState):
             refname = self.is_reference(reference)
             if refname:
                 return 'refname', refname
-        reference = ''.join([''.join(line.split()) for line in block])
-        return 'refuri', unescape(reference)
+        ref_parts = split_escaped_whitespace(' '.join(block))
+        reference = ' '.join(''.join(unescape(part).split())
+                             for part in ref_parts)
+        return 'refuri', reference
 
     def is_reference(self, reference):
         match = self.explicit.patterns.reference.match(

@@ -27,7 +27,16 @@ from bisect import bisect_right
 
 from babel.core import default_locale, get_global, Locale
 from babel.util import UTC, LOCALTZ
-from babel._compat import string_types, integer_types, number_types
+from babel._compat import string_types, integer_types, number_types, PY2
+
+# "If a given short metazone form is known NOT to be understood in a given
+#  locale and the parent locale has this value such that it would normally
+#  be inherited, the inheritance of this value can be explicitly disabled by
+#  use of the 'no inheritance marker' as the value, which is 3 simultaneous [sic]
+#  empty set characters ( U+2205 )."
+#  - http://www.unicode.org/reports/tr35/tr35-dates.html#Metazone_Names
+
+NO_INHERITANCE_MARKER = u'\u2205\u2205\u2205'
 
 
 LC_TIME = default_locale('LC_TIME')
@@ -642,8 +651,13 @@ def get_timezone_name(dt_or_tzinfo=None, width='long', uncommon=False,
     if metazone:
         metazone_info = locale.meta_zones.get(metazone, {})
         if width in metazone_info:
-            if zone_variant in metazone_info[width]:
-                return metazone_info[width][zone_variant]
+            name = metazone_info[width].get(zone_variant)
+            if width == 'short' and name == NO_INHERITANCE_MARKER:
+                # If the short form is marked no-inheritance,
+                # try to fall back to the long name instead.
+                name = metazone_info.get('long', {}).get(zone_variant)
+            if name:
+                return name
 
     # If we have a concrete datetime, we assume that the result can't be
     # independent of daylight savings time, so we return the GMT offset
@@ -1080,12 +1094,16 @@ def get_period_id(time, tzinfo=None, type=None, locale=LC_TIME):
     locale = Locale.parse(locale)
 
     # The LDML rules state that the rules may not overlap, so iterating in arbitrary
-    # order should be alright.
-    for rule_id, rules in locale.day_period_rules.get(type, {}).items():
+    # order should be alright, though `at` periods should be preferred.
+    rulesets = locale.day_period_rules.get(type, {}).items()
+
+    for rule_id, rules in rulesets:
         for rule in rules:
             if "at" in rule and rule["at"] == seconds_past_midnight:
                 return rule_id
 
+    for rule_id, rules in rulesets:
+        for rule in rules:
             start_ok = end_ok = False
 
             if "from" in rule and seconds_past_midnight >= rule["from"]:
@@ -1096,8 +1114,8 @@ def get_period_id(time, tzinfo=None, type=None, locale=LC_TIME):
                 end_ok = True
             if "before" in rule and seconds_past_midnight < rule["before"]:
                 end_ok = True
-            if "after" in rule and seconds_past_midnight > rule["after"]:
-                start_ok = True
+            if "after" in rule:
+                raise NotImplementedError("'after' is deprecated as of CLDR 29.")
 
             if start_ok and end_ok:
                 return rule_id
@@ -1198,6 +1216,12 @@ class DateTimePattern(object):
 
     def __unicode__(self):
         return self.pattern
+
+    def __str__(self):
+        pat = self.pattern
+        if PY2:
+            pat = pat.encode('utf-8')
+        return pat
 
     def __mod__(self, other):
         if type(other) is not DateTimeFormat:
@@ -1306,14 +1330,14 @@ class DateTimeFormat(object):
     def format_quarter(self, char, num):
         quarter = (self.value.month - 1) // 3 + 1
         if num <= 2:
-            return ('%%0%dd' % num) % quarter
+            return '%0*d' % (num, quarter)
         width = {3: 'abbreviated', 4: 'wide', 5: 'narrow'}[num]
         context = {'Q': 'format', 'q': 'stand-alone'}[char]
         return get_quarter_names(width, context, self.locale)[quarter]
 
     def format_month(self, char, num):
         if num <= 2:
-            return ('%%0%dd' % num) % self.value.month
+            return '%0*d' % (num, self.value.month)
         width = {3: 'abbreviated', 4: 'wide', 5: 'narrow'}[num]
         context = {'M': 'format', 'L': 'stand-alone'}[char]
         return get_month_names(width, context, self.locale)[self.value.month]
@@ -1446,7 +1470,7 @@ class DateTimeFormat(object):
                 return get_timezone_gmt(self.value, width='iso8601', locale=self.locale)
 
     def format(self, value, length):
-        return ('%%0%dd' % length) % value
+        return '%0*d' % (length, value)
 
     def get_day_of_year(self, date=None):
         if date is None:
