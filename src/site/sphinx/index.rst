@@ -44,6 +44,43 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.6.0 (15-Sep-2017)
+^^^^^^^^^^^^^^^^^^^
+- Updates:
+
+  - alabaster 0.7.10
+  - Babel 2.5.1
+  - CommonMark 0.7.4
+  - docutils 0.14
+  - javalang 0.11.0
+  - Jinja2 2.9.6
+  - Jython 2.7.1
+  - MarkupSafe 1.0
+  - pytz 2017.2
+  - requests 2.18.4
+  - Sphinx 1.6.3
+  - sphinx_rtd_theme 0.2.5b1
+  - sphinxcontrib-inlinesyntaxhighlight HEAD
+  - sphinxcontrib-plantuml 0.8.1
+
+- New themes:
+
+  - sphinx_bootstrap_theme 0.6.0
+  - guzzle_sphinx_theme 0.7.11
+
+- New dependencies:
+
+  - certifi 2017.7.27.1
+  - chardet 3.0.4
+  - idna 2.6
+  - typing 3.6.2
+  - urllib3 1.22
+
+- Miscellaneous:
+
+  - Use Maven wrapper and Maven 3.5.0
+  - Update Maven plugins
+
 1.5.3.Final (28-Sep-2016)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 - Upgraded Sphinx to 1.5.2
