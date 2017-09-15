@@ -1,0 +1,8 @@
+.buildinfo
+.doctrees
+_static/fonts/Inconsolata*
+_static/fonts/Inconsolata/*
+_static/fonts/Lato*
+_static/fonts/Lato/*
+_static/fonts/RobotoSlab*
+_static/fonts/RobotoSlab/*

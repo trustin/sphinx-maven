@@ -1,0 +1,341 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>Using the Plugin &mdash; sphinx-maven-plugin 2.10.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/overrides.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Configuration" href="configuration.html" />
+    <link rel="prev" title="sphinx-maven-plugin" href="index.html" />
+  <script src="https://cdn.jsdelivr.net/npm/interactjs@1.4.0/dist/interact.min.js"></script>
+  <script src="_static/center_page.js"></script>
+   
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> sphinx-maven-plugin
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2.10
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Using the Plugin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#executing-within-site-lifecycle">Executing within <code class="docutils literal notranslate"><span class="pre">site</span></code> lifecycle</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overriding-default-maven-site">Overriding default Maven site</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generating-documentation-as-a-project-report">Generating documentation as a project report</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#executing-within-normal-lifecycle">Executing within normal lifecycle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html#sample-documentation-config">Sample Documentation Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="faq.html">Frequently Asked Questions</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/trustin/sphinx-maven-plugin/releases">Release notes</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/trustin/sphinx-maven-plugin">Fork me on GitHub</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">sphinx-maven-plugin</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Using the Plugin</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            
+              <a href="https://github.com/trustin/sphinx-maven-plugin/blob/master/src/site/sphinx/basic-usage.rst" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="using-the-plugin">
+<span id="contents"></span><h1>Using the Plugin<a class="headerlink" href="#using-the-plugin" title="Permalink to this headline">¶</a></h1>
+<p>The <em>sphinx-maven-plugin</em> looks for <em>.rst</em> files in the folder structure provided as part of plugin
+configuration within your pom file. The default location where the plugin will look for the files is
+<code class="docutils literal notranslate"><span class="pre">src/site/sphinx</span></code>.</p>
+<p>The folder specified will contain the  <a class="reference external" href="http://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html">reStructured Text</a>
+source files plus any additional things like themes and configuration. The <a class="reference external" href="http://www.sphinx-doc.org/en/master/usage/quickstart.html">Getting started</a>
+gives a good introduction into the required tasks. Basically what you need is:</p>
+<ul class="simple">
+<li><p>A configuration file called <a class="reference external" href="http://www.sphinx-doc.org/en/master/config.html">conf.py</a> that defines the
+theme and other options</p></li>
+<li><p>The documentation files in reStructured Text format.</p></li>
+<li><p>Additional files such as static files (images etc.), usually in a <code class="docutils literal notranslate"><span class="pre">_static</span></code> subdirectory.</p></li>
+<li><p>Optionally, a customized theme in a subdirectory called <code class="docutils literal notranslate"><span class="pre">_theme</span></code></p></li>
+</ul>
+</div>
+<div class="section" id="executing-within-site-lifecycle">
+<h1>Executing within <code class="docutils literal notranslate"><span class="pre">site</span></code> lifecycle<a class="headerlink" href="#executing-within-site-lifecycle" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="overriding-default-maven-site">
+<h2>Overriding default Maven site<a class="headerlink" href="#overriding-default-maven-site" title="Permalink to this headline">¶</a></h2>
+<p>Simply add the sphinx-maven-plugin to your <code class="docutils literal notranslate"><span class="pre">pom.xml</span></code>:</p>
+<pre class="literal-block">&lt;reporting&gt;
+  &lt;plugins&gt;
+    &lt;plugin&gt;
+      &lt;groupId&gt;org.apache.maven.plugins&lt;/groupId&gt;
+      &lt;artifactId&gt;maven-project-info-reports-plugin&lt;/artifactId&gt;
+      &lt;version&gt;2.9&lt;/version&gt;
+      &lt;reportSets&gt;
+        &lt;reportSet&gt;
+          &lt;reports /&gt;
+        &lt;/reportSet&gt;
+      &lt;/reportSets&gt;
+    &lt;/plugin&gt;
+    &lt;plugin&gt;
+      &lt;groupId&gt;kr.motd.maven&lt;/groupId&gt;
+      &lt;artifactId&gt;sphinx-maven-plugin&lt;/artifactId&gt;
+      &lt;version&gt;2.10.0&lt;/version&gt;
+      &lt;configuration&gt;
+        &lt;builder&gt;html&lt;/builder&gt;
+      &lt;/configuration&gt;
+    &lt;/plugin&gt;
+  &lt;/plugins&gt;
+&lt;/reporting&gt;</pre>
+<p>Now all you need to do is to generate the documentation:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mvn</span> <span class="n">site</span>
+</pre></div>
+</div>
+<p>This will generate the documentation in the <cite>target/site</cite> folder.</p>
+</div>
+<div class="section" id="generating-documentation-as-a-project-report">
+<h2>Generating documentation as a project report<a class="headerlink" href="#generating-documentation-as-a-project-report" title="Permalink to this headline">¶</a></h2>
+<p>You can also generate the documentation as a project report in Maven default site :</p>
+<pre class="literal-block">&lt;reporting&gt;
+  &lt;plugins&gt;
+    &lt;plugin&gt;
+      &lt;groupId&gt;org.apache.maven.plugins&lt;/groupId&gt;
+      &lt;artifactId&gt;maven-project-info-reports-plugin&lt;/artifactId&gt;
+      &lt;version&gt;2.9&lt;/version&gt;
+    &lt;/plugin&gt;
+    &lt;plugin&gt;
+      &lt;groupId&gt;kr.motd.maven&lt;/groupId&gt;
+      &lt;artifactId&gt;sphinx-maven-plugin&lt;/artifactId&gt;
+      &lt;version&gt;2.10.0&lt;/version&gt;
+      &lt;configuration&gt;
+        &lt;asReport&gt;true&lt;/asReport&gt;
+        &lt;name&gt;Project documentation&lt;/name&gt;
+        &lt;description&gt;Documentation about ${project.name}&lt;/description&gt;
+      &lt;/configuration&gt;
+    &lt;/plugin&gt;
+  &lt;/plugins&gt;
+&lt;/reporting&gt;</pre>
+<p>Then :</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mvn</span> <span class="n">site</span>
+</pre></div>
+</div>
+<p>This will generate the documentation in the <cite>target/site/sphinx</cite> folder without affecting default Maven site (remains
+in <cite>target/site</cite>). You can access the documentation through “Project reports” in Maven site menu bar.</p>
+</div>
+</div>
+<div class="section" id="executing-within-normal-lifecycle">
+<h1>Executing within normal lifecycle<a class="headerlink" href="#executing-within-normal-lifecycle" title="Permalink to this headline">¶</a></h1>
+<p>You can also bind the plugin to a normal lifecycle phase. This is for instance useful if you want to generate a
+documentation artifact and deploy it somewhere.</p>
+<p>The plugin configuration is pretty much the same, the only difference is that you need to add an <code class="docutils literal notranslate"><span class="pre">execution</span></code>
+section. It might also be useful to change the <code class="docutils literal notranslate"><span class="pre">outputDirectory</span></code> to a different folder as the plugin by
+default puts the generated documentation into the <code class="docutils literal notranslate"><span class="pre">target/site</span></code> folder.</p>
+<p>A sample <code class="docutils literal notranslate"><span class="pre">pom.xml</span></code> plugin section could look like this:</p>
+<pre class="literal-block">&lt;build&gt;
+  &lt;plugins&gt;
+    ...
+    &lt;plugin&gt;
+      &lt;groupId&gt;kr.motd.maven&lt;/groupId&gt;
+      &lt;artifactId&gt;sphinx-maven-plugin&lt;/artifactId&gt;
+      &lt;version&gt;2.10.0&lt;/version&gt;
+      &lt;configuration&gt;
+        &lt;outputDirectory&gt;${project.build.directory}/docs&lt;/outputDirectory&gt;
+      &lt;/configuration&gt;
+      &lt;executions&gt;
+        &lt;execution&gt;
+          &lt;phase&gt;package&lt;/phase&gt;
+          &lt;goals&gt;
+            &lt;goal&gt;generate&lt;/goal&gt;
+          &lt;/goals&gt;
+        &lt;/execution&gt;
+      &lt;/executions&gt;
+    &lt;/plugin&gt;
+    ...
+  &lt;/plugins&gt;
+&lt;/build&gt;</pre>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+        <a href="configuration.html" class="btn btn-neutral float-right" title="Configuration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="index.html" class="btn btn-neutral float-left" title="sphinx-maven-plugin" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &#169; Copyright 2016, Trustin Lee et al.
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+  
+  <a class="github-fork-ribbon" href="https://github.com/trustin/sphinx-maven-plugin"
+    data-ribbon="Fork me on GitHub" title="Fork me on GitHub">Fork me on GitHub</a>
+   
+
+
+</body>
+</html>
