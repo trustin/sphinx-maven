@@ -1,0 +1,24 @@
+diff -urN dist.orig/sphinxcontrib/inlinesyntaxhighlight.py dist/sphinxcontrib/inlinesyntaxhighlight.py
+--- dist.orig/sphinxcontrib/inlinesyntaxhighlight.py	2017-09-16 13:27:20.825601390 +0900
++++ dist/sphinxcontrib/inlinesyntaxhighlight.py	2017-09-16 13:31:05.055603526 +0900
+@@ -40,7 +40,7 @@
+ PRE_DIV_RE = re.compile(r'\s*</pre></div>\s*$')
+ 
+ def html_visit_literal(self, node):
+-    env = self.settings.env
++    env = self.builder.env
+ 
+     shall_highlight = False
+ 
+diff -urN dist.orig/sphinxcontrib/plantuml.py dist/sphinxcontrib/plantuml.py
+--- dist.orig/sphinxcontrib/plantuml.py	2017-09-16 13:27:20.825601390 +0900
++++ dist/sphinxcontrib/plantuml.py	2017-09-16 13:31:05.875603534 +0900
+@@ -20,7 +20,7 @@
+ from docutils import nodes
+ from docutils.parsers.rst import directives
+ from sphinx.errors import SphinxError
+-from sphinx.util.compat import Directive
++from docutils.parsers.rst import Directive
+ from sphinx.util.osutil import (
+     ensuredir,
+     ENOENT,
