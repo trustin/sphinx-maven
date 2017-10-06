@@ -13,6 +13,7 @@ Parameter                Description                                            
 ======================== ================================================================================================= ========================================
 ``sourceDirectory``      The directory containing the documentation source.                                                ``${basedir}/src/site/sphinx``
 ``outputDirectory``      The directory where the generated output will be placed.                                          ``${project.reporting.outputDirectory}``
+``configDirectory``      The directory containing the conf.py file.                                                        ``${basedir}/src/site/sphinx``
 ``outputName``           The base name used to create the report's output file(s).                                         ``Python-Sphinx``
 ``name``                 The name of the report.                                                                           ``Sphinx-Docs``
 ``description``          The description of the report.                                                                    ``Documentation via sphinx``

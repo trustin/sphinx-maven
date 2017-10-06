@@ -1,12 +1,8 @@
 package kr.motd.maven.sphinx;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -76,6 +72,12 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private File sourceDirectory;
 
     /**
+     * The directory containing the sphinx conf.py file.
+     */
+    @Parameter(property = "sphinx.configDir", defaultValue = "${basedir}/src/site/sphinx", required = true)
+    private File configDirectory;
+
+    /**
      * Directory where reports will go.
      */
     @Parameter(defaultValue = "${project.reporting.outputDirectory}", required = true, readonly = true)
@@ -123,6 +125,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         sourceDirectory = canonicalize(sourceDirectory);
         outputDirectory = canonicalize(outputDirectory);
         sphinxSourceDirectory = canonicalize(sphinxSourceDirectory);
+        configDirectory = canonicalize(configDirectory);
 
         // to avoid Maven overriding resulting index.html, update index.rst to force re-building of index
         if (isHtmlReport()) {
@@ -175,6 +178,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         getLog().info("Running Sphinx on " + sourceDirectory + ", output will be placed in "
                       + outputDirectory);
         List<String> args = getSphinxRunnerCmdLine();
+        getLog().debug("args=" + args);
         if (sphinxRunner.runSphinx(args) != 0) {
             throw new MavenReportException("Sphinx report generation failed");
         }
@@ -291,6 +295,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
                 args.add("-t");
                 args.add(tag);
             }
+        }
+
+        if (!sourceDirectory.getPath().equals(configDirectory.getPath())) {
+        	args.add("-c");
+        	args.add(configDirectory.getPath());
         }
 
         args.add("-n");
