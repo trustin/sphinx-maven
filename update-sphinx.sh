@@ -24,16 +24,25 @@ rm -fr "$JYTHON_HOME"
 java -jar "$JYTHON_INSTALLER" -s -d "$JYTHON_HOME" -t standard
 
 "$JYTHON_HOME/bin/jython" "$WORKDIR/ez_setup.py"
+
+## Core
+"$JYTHON_HOME/bin/easy_install" \
+  'PyYAML==3.12' \
+  'sphinx==1.6.5'
+
+## Extensions
+"$JYTHON_HOME/bin/easy_install" \
+  'javasphinx==0.9.15' \
+  'recommonmark==0.4.0' \
+  'sphinxcontrib-inlinesyntaxhighlight==0.2' \
+  'sphinxcontrib-plantuml==0.8.2' \
+  'sphinxcontrib-scaladomain==0.1a1'
+
+## Themes
 "$JYTHON_HOME/bin/easy_install" \
   'guzzle_sphinx_theme==0.7.11' \
-  'javasphinx==0.9.15' \
-  'PyYAML==3.12' \
-  'recommonmark==0.4.0' \
-  'sphinx==1.6.3' \
   'sphinx_bootstrap_theme==0.6.0' \
-  'sphinx_rtd_theme==0.2.5b1' \
-  'sphinxcontrib-plantuml==0.8.1' \
-  'sphinxcontrib-inlinesyntaxhighlight==0.2'
+  'sphinx_rtd_theme==0.2.5b2'
 
 # Extract .egg files if not extracted yet.
 find "$JYTHON_HOME/Lib/site-packages" -type f -name '*.egg' | while read -r F; do

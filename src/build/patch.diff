@@ -10,15 +10,22 @@ diff -urN dist.orig/sphinxcontrib/inlinesyntaxhighlight.py dist/sphinxcontrib/in
  
      shall_highlight = False
  
-diff -urN dist.orig/sphinxcontrib/plantuml.py dist/sphinxcontrib/plantuml.py
---- dist.orig/sphinxcontrib/plantuml.py	2017-09-16 13:27:20.825601390 +0900
-+++ dist/sphinxcontrib/plantuml.py	2017-09-16 13:31:05.875603534 +0900
-@@ -20,7 +20,7 @@
+diff -urN dist.orig/sphinxcontrib/scaladomain.py dist/sphinxcontrib/scaladomain.py
+--- dist.orig/sphinxcontrib/scaladomain.py	2017-12-09 11:23:34.073819199 +0900
++++ dist/sphinxcontrib/scaladomain.py	2017-12-09 11:24:15.413819072 +0900
+@@ -13,14 +13,13 @@
+ __release__ = '0.1a1'
+ 
  from docutils import nodes
- from docutils.parsers.rst import directives
- from sphinx.errors import SphinxError
+-from docutils.parsers.rst import directives
++from docutils.parsers.rst import directives, Directive
+ 
+ from sphinx import addnodes
+ from sphinx.directives import ObjectDescription
+ from sphinx.domains import Domain, ObjType, Index
+ from sphinx.roles import XRefRole
+ from sphinx.util.docfields import Field, GroupedField, TypedField
 -from sphinx.util.compat import Directive
-+from docutils.parsers.rst import Directive
- from sphinx.util.osutil import (
-     ensuredir,
-     ENOENT,
+ from sphinx.util.nodes import make_refnode
+ 
+ class ScalaPackage(Directive):
