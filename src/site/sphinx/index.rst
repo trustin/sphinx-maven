@@ -44,6 +44,19 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.6.2 (09-Dec-2017)
+^^^^^^^^^^^^^^^^^^^
+- Updates:
+
+  - Sphinx 1.6.5
+  - sphinx_rtd_theme 0.2.5b2
+  - sphinxcontrib-plantuml 0.8.2
+
+- New extensions:
+
+  - sphinxcontrib-scaladomain 0.1a1
+
+
 1.6.1 (16-Sep-2017)
 ^^^^^^^^^^^^^^^^^^^
 - Ship pre-compiled Python classes instead of source files
