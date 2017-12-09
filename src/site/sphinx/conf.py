@@ -4,8 +4,16 @@ import sys, os
 from recommonmark.parser import CommonMarkParser
 import yaml
 
+# Ensure tags are passed.
+assert tags.has('tagFoo')
+assert tags.has('tagBar')
+
+# Ensure we can load a YAML file.
 with open('test.yaml', 'r') as stream:
-    print(yaml.load(stream))
+    test_yaml = yaml.load(stream)
+    assert test_yaml[0] == 'a'
+    assert test_yaml[1] == 'b'
+    assert test_yaml[2] == 'c'
 
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'

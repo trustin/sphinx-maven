@@ -182,6 +182,10 @@
         <configuration>
           <builder>html</builder>
           <sourceDirectory>${basedir}/src/site/sphinx/</sourceDirectory>
+          <tags>
+            <tag>tagFoo</tag>
+            <tag>tagBar</tag>
+          </tags>
         </configuration>
       </plugin>
     </plugins>
