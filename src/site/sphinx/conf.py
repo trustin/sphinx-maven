@@ -10,7 +10,7 @@ with open('test.yaml', 'r') as stream:
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'
 version = '1.6'
-release = '1.6.1'
+release = '1.6.2'
 
 # General options
 needs_sphinx = '1.0'
@@ -19,7 +19,7 @@ pygments_style = 'tango'
 add_function_parentheses = True
 
 extensions = ['sphinx.ext.autodoc', 'javasphinx',
-              'sphinxcontrib.plantuml', 'sphinxcontrib.inlinesyntaxhighlight']
+              'sphinxcontrib.plantuml', 'sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.scaladomain']
 templates_path = ['_templates']
 exclude_trees = ['.build']
 source_suffix = ['.rst', '.md']
