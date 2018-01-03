@@ -1,15 +1,22 @@
 package kr.motd.maven.sphinx;
 
+import static java.util.Objects.requireNonNull;
+
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOError;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.security.CodeSource;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -23,141 +30,170 @@ import net.sourceforge.plantuml.UmlDiagram;
 /**
  * Sphinx Runner.
  */
-public abstract class SphinxRunner {
+public final class SphinxRunner implements AutoCloseable {
 
+    private static final String VERSION;
     private static final String DIST_PREFIX =
             SphinxRunner.class.getPackage().getName().replace('.', '/') + "/dist/";
 
-    /** PlantUML Jar Exec Script for sphinx-plantuml plugin. */
-    private final String plantUmlCommand;
+    static {
+        final Properties versionProps = new Properties();
+        try {
+            versionProps.load(SphinxRunner.class.getResourceAsStream("version.properties"));
+        } catch (IOException e) {
+            throw new IOError(e);
+        }
+        VERSION = versionProps.getProperty("version");
+        if (VERSION == null) {
+            throw new IllegalStateException("cannot determine the plugin version");
+        }
+    }
 
-    /**
-     * Initialize Environment to execute the plugin.
-     */
-    protected SphinxRunner(File sphinxSourceDirectory) {
-        if (sphinxSourceDirectory == null) {
-            throw new IllegalArgumentException("sphinxSourceDirectory is empty.");
+    private final File sphinxSourceDirectory;
+    private final SphinxRunnerLogger logger;
+
+    private final PySystemState sysState;
+    private final PythonInterpreter interpreter;
+    private final PyObject mainFunc;
+    private boolean run;
+
+    public SphinxRunner(File sphinxSourceDirectory, SphinxRunnerLogger logger) {
+        this.sphinxSourceDirectory = requireNonNull(sphinxSourceDirectory, "sphinxSourceDirectory");
+        this.logger = requireNonNull(logger, "logger");
+
+        final String plantUmlCommand = "java -jar " + findPlantUmlJar().getPath().replace("\\", "\\\\");
+        final File sphinxDirectory = extractSphinx();
+
+        PySystemState sysState = null;
+        PythonInterpreter interpreter = null;
+        boolean success = false;
+        try {
+            final long startTime = System.nanoTime();
+            logger.log("Sphinx directory: " + sphinxDirectory);
+            logger.log("PlantUML command: " + plantUmlCommand);
+            logger.log("Initializing the interpreter ..");
+
+            // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
+            System.setProperty("java.awt.headless", "true");
+
+            // this setting supposedly allows GCing of jython-generated classes but I'm
+            // not sure if this setting has any effect on newer jython versions anymore
+            System.setProperty("python.options.internalTablesImpl", "weak");
+
+            sysState = new PySystemState();
+            sysState.path.append(Py.newString(sphinxDirectory.getPath()));
+            logger.log("Jython path: " + sysState.path);
+
+            // Set some necessary environment variables.
+            interpreter = new PythonInterpreter(null, sysState);
+            interpreter.exec("from os import putenv");
+            PyObject env = interpreter.get("putenv");
+
+            // Set the locale for consistency.
+            env.__call__(Py.java2py("LANG"), Py.java2py("en_US.UTF-8"));
+            env.__call__(Py.java2py("LC_ALL"), Py.java2py("en_US.UTF-8"));
+
+            // Set the command that runs PlantUML.
+            env.__call__(Py.java2py("plantuml"), Py.java2py(plantUmlCommand));
+
+            // babel/localtime/_unix.py attempts to use os.readlink() which is
+            // unavailable in some OSes. Setting the 'TZ' environment variable
+            // works around this problem.
+            env.__call__(Py.java2py("TZ"), Py.java2py("UTC"));
+
+            // Import Sphinx to preload it.
+            interpreter.exec("from sphinx.application import Sphinx as PreloadedSphinx");
+
+            // Prepare the main function.
+            interpreter.exec("from sphinx import build_main");
+            mainFunc = interpreter.get("build_main");
+            logger.log("Initialized the interpreter. Took " +
+                       TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime) + "ms.");
+
+            this.sysState = sysState;
+            this.interpreter = interpreter;
+            success = true;
+        } catch (Exception e) {
+            throw new SphinxException("Failed to initialize Sphinx: " + e, e);
+        } finally {
+            if (!success) {
+                if (interpreter != null) {
+                    interpreter.close();
+                }
+                if (sysState != null) {
+                    sysState.close();
+                }
+            }
+        }
+    }
+
+    public int run(List<String> args) {
+        requireNonNull(args, "args");
+        if (args.isEmpty()) {
+            throw new IllegalArgumentException("args is empty.");
         }
 
-        extractSphinx(sphinxSourceDirectory);
-        final File plantUmlJar = findPlantUmlJar();
-
-        plantUmlCommand = "java -jar " + plantUmlJar.getPath().replace("\\", "\\\\");
-        log("PlantUML command: " + plantUmlCommand);
-
-        // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
-        System.setProperty("java.awt.headless", "true");
-
-        // this setting supposedly allows GCing of jython-generated classes but I'm
-        // not sure if this setting has any effect on newer jython versions anymore
-        System.setProperty("python.options.internalTablesImpl", "weak");
-
-        PySystemState engineSys = new PySystemState();
-        engineSys.path.append(Py.newString(sphinxSourceDirectory.getPath()));
-        Py.setSystemState(engineSys);
-        log("Path: " + engineSys.path);
-    }
-
-    public void destroy() {
-        Py.getSystemState().cleanup();
-    }
-
-    protected abstract void log(String msg);
-
-    /**
-     * Execute Python Script using Jython Python Interpreter.
-     *
-     * @param script to execute
-     * @param functionName the function name to which arguments have to be passed.
-     */
-    private int executePythonScript(
-            String script, String functionName, List<String> args, boolean resultExpected) {
-
-        log("args: " + args);
-
-        PythonInterpreter pi = new PythonInterpreter();
-
-        // Set some necessary environment variables.
-        pi.exec("from os import putenv");
-        PyObject env = pi.get("putenv");
-
-        // Set the locale for consistency.
-        env.__call__(Py.java2py("LANG"), Py.java2py("en_US.UTF-8"));
-        env.__call__(Py.java2py("LC_ALL"), Py.java2py("en_US.UTF-8"));
-
-        // Set the command that runs PlantUML.
-        env.__call__(Py.java2py("plantuml"), Py.java2py(plantUmlCommand));
-
-        // babel/localtime/_unix.py attempts to use os.readlink() which is unavailable in some OSes.
-        // Setting the 'TZ' environment variable works around this problem.
-        env.__call__(Py.java2py("TZ"), Py.java2py("UTC"));
-
-        // Execute the script, finally.
-        pi.exec(script);
-
-        PyObject func = pi.get(functionName);
-        PyObject ret = func.__call__(Py.java2py(args));
-        int result = 0;
-        if (resultExpected) {
-            result = Py.tojava(ret, Integer.class);
+        if (run) {
+            throw new IllegalStateException("run already");
         }
 
-        pi.close();
-        pi.cleanup();
+        run = true;
+        try {
+            final long startTime = System.nanoTime();
+            final PyObject ret = mainFunc.__call__(Py.java2py(args));
+            final int exitCode = Py.tojava(ret, Integer.class);
+            logger.log("Sphinx exited with code " + exitCode + ". Took " +
+                       TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime) + "ms.");
+            return exitCode;
+        } catch (Exception e) {
+            throw new SphinxException("Failed to run Sphinx: " + e, e);
+        } finally {
+            close();
+        }
+    }
 
-        return result;
+    @Override
+    public void close() {
+        interpreter.close();
+        sysState.close();
     }
 
     /**
-     * Execute Sphinx Documentation Builder.
+     * Unpack Sphinx and its dependencies into the file system.
      */
-    public int runSphinx(List<String> args) {
-        String invokeSphinxScript = "from sphinx import build_main";
-        String functionName = "build_main";
-        return executePythonScript(invokeSphinxScript, functionName, args, true);
-    }
+    private File extractSphinx() {
+        final File sphinxCacheDir = sphinxSourceDirectory;
+        sphinxCacheDir.mkdirs();
 
-    /**
-     * Unpack Sphinx zip file.
-     */
-    private void extractSphinx(File sphinxSourceDirectory) {
-        log("Extracting Sphinx into: " + sphinxSourceDirectory);
+        final File sphinxDir = new File(sphinxCacheDir, VERSION);
+        if (sphinxDir.isDirectory()) {
+            return sphinxDir;
+        }
 
         try {
+            final File tmpDir = Files.createTempDirectory(sphinxCacheDir.toPath(), VERSION + ".tmp.").toFile();
+            logger.log("Extracting Sphinx into: " + tmpDir);
+
             final JarFile jar = new JarFile(findPluginJar(), false);
             final byte[] buf = new byte[65536];
-            for (Enumeration<JarEntry> i = jar.entries(); i.hasMoreElements();) {
+            for (Enumeration<JarEntry> i = jar.entries(); i.hasMoreElements(); ) {
                 final JarEntry e = i.nextElement();
                 if (!e.getName().startsWith(DIST_PREFIX)) {
                     continue;
                 }
 
-                final File f = new File(sphinxSourceDirectory + File.separator +
+                final File f = new File(tmpDir + File.separator +
                                         e.getName().substring(DIST_PREFIX.length()));
 
                 if (e.isDirectory()) {
                     if (!f.mkdirs() && !f.exists()) {
-                        throw new SphinxException("failed to create a directory: " + f);
+                        throw new SphinxException("Failed to create a directory: " + f);
                     }
                     continue;
                 }
 
-                if (f.exists()) {
-                    if (f.length() == e.getSize()) {
-                        // Very likely that the entry has been extracted in a previous run.
-                        continue;
-                    }
-
-                    if (!f.delete()) {
-                        throw new SphinxException("failed to delete a file: " + f);
-                    }
-                }
-
-                final File tmpF = new File(f.getParentFile(), ".tmp-" + f.getName());
-                boolean success = false;
-                try (InputStream in = jar.getInputStream(e);
-                     OutputStream out = new FileOutputStream(tmpF)) {
-
+                try (final InputStream in = jar.getInputStream(e);
+                     final OutputStream out = new FileOutputStream(f)) {
                     for (;;) {
                         int readBytes = in.read(buf);
                         if (readBytes < 0) {
@@ -165,20 +201,18 @@ public abstract class SphinxRunner {
                         }
                         out.write(buf, 0, readBytes);
                     }
-
-                    success = true;
-                } finally {
-                    if (!success) {
-                        tmpF.delete();
-                    }
-                }
-
-                if (!tmpF.renameTo(f)) {
-                    throw new SphinxException("failed to rename a file: " + tmpF + " -> " + f.getName());
                 }
             }
+
+            if (!tmpDir.renameTo(sphinxDir)) {
+                throw new SphinxException("Failed to rename: " + tmpDir + " -> " + sphinxDir.getName());
+            }
+
+            return sphinxDir;
+        } catch (SphinxException e) {
+            throw e;
         } catch (Exception e) {
-            throw new SphinxException("failed to extract Sphinx into: " + sphinxSourceDirectory, e);
+            throw new SphinxException("Failed to extract Sphinx: " + e, e);
         }
     }
 
@@ -198,7 +232,7 @@ public abstract class SphinxRunner {
         }
 
         final URL url = codeSource.getLocation();
-        log(name + ": " + url);
+        logger.log(name + ": " + url);
         if (!"file".equals(url.getProtocol()) || !url.getPath().toLowerCase(Locale.US).endsWith(".jar")) {
             throw new SphinxException(
                     "failed to get the location of " + name + " (unexpected URL: " + url + ')');

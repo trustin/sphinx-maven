@@ -1,12 +1,8 @@
 package kr.motd.maven.sphinx;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -129,29 +125,25 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             new File(sourceDirectory.getPath() + "/index.rst").setLastModified(System.currentTimeMillis());
         }
 
-        final SphinxRunner sphinxRunner;
-        try {
-            sphinxRunner = new SphinxRunner(sphinxSourceDirectory) {
-                @Override
-                protected void log(String msg) {
-                    getLog().debug(msg);
-                }
-            };
-        } catch (Exception ex) {
-            throw new MojoExecutionException("Failed to extract libraries.", ex);
-        }
+        try (final SphinxRunner sphinxRunner = new SphinxRunner(sphinxSourceDirectory, new SphinxRunnerLogger() {
+            @Override
+            public void log(String msg) {
+                getLog().debug(msg);
+            }
+        })) {
+            getLog().info("Running Sphinx; output will be placed in " + outputDirectory);
+            final List<String> args = getSphinxRunnerCmdLine();
+            if (sphinxRunner.run(args) != 0) {
+                throw new MavenReportException("Sphinx report generation failed");
+            }
 
-        try {
-            executeSphinx(sphinxRunner);
             SphinxUtil.convertLineSeparators(outputDirectory);
-            // only delete crufts if Maven site is overriden (default behavior)
+            // only delete crufts if Maven site is overridden (default behavior)
             if (!asReport) {
                 deleteCruft();
             }
         } catch (Exception e) {
             throw new MojoExecutionException("Failed to run the report", e);
-        } finally {
-            sphinxRunner.destroy();
         }
     }
 
@@ -165,18 +157,6 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             return directory.getCanonicalFile();
         } catch (IOException e) {
             throw new MojoExecutionException("failed to create a directory: " + directory, e);
-        }
-    }
-
-    /**
-     * Execute Sphinx
-     */
-    private void executeSphinx(SphinxRunner sphinxRunner) throws MavenReportException {
-        getLog().info("Running Sphinx on " + sourceDirectory + ", output will be placed in "
-                      + outputDirectory);
-        List<String> args = getSphinxRunnerCmdLine();
-        if (sphinxRunner.runSphinx(args) != 0) {
-            throw new MavenReportException("Sphinx report generation failed");
         }
     }
 
