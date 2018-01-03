@@ -44,6 +44,15 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+1.7.0 (03-Jan-2018)
+^^^^^^^^^^^^^^^^^^^
+
+- Slightly reduced startup time
+- Refactoring and clean-up
+- New extensions:
+
+  - sphinxcontrib-httpdomain 1.5.0
+
 1.6.2 (09-Dec-2017)
 ^^^^^^^^^^^^^^^^^^^
 - Updates:
