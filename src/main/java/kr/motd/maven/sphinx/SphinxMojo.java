@@ -114,8 +114,19 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Parameter(property = "sphinx.force", defaultValue = "false", required = true, alias = "force")
     private boolean force;
 
+    /**
+     * Whether Sphinx execution should be skipped.
+     */
+    @Parameter(property = "sphinx.skip", defaultValue = "false", required = true, alias = "skip")
+    private boolean skip;
+
     @Override
     public void execute() throws MojoExecutionException {
+        if (skip) {
+            getLog().info("Skipping Sphinx execution.");
+            return;
+        }
+
         sourceDirectory = canonicalize(sourceDirectory);
         outputDirectory = canonicalize(outputDirectory);
         sphinxSourceDirectory = canonicalize(sphinxSourceDirectory);
