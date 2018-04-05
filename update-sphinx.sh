@@ -28,21 +28,21 @@ java -jar "$JYTHON_INSTALLER" -s -d "$JYTHON_HOME" -t standard
 ## Core
 "$JYTHON_HOME/bin/easy_install" \
   'PyYAML==3.12' \
-  'Sphinx==1.6.5'
+  'Sphinx==1.7.2'
 
 ## Extensions
 "$JYTHON_HOME/bin/easy_install" \
   'javasphinx==0.9.15' \
   'recommonmark==0.4.0' \
-  'sphinxcontrib-httpdomain==1.5.0' \
+  'sphinxcontrib-httpdomain==1.6.1' \
   'sphinxcontrib-inlinesyntaxhighlight==0.2' \
-  'sphinxcontrib-plantuml==0.8.2' \
-  'sphinxcontrib-scaladomain==0.1a1'
+  'sphinxcontrib-plantuml==0.11' \
+  "$BASEDIR/src/build/sphinxcontrib-scaladomain-0.1a1-patched.tar.gz"
 
 ## Themes
 "$JYTHON_HOME/bin/easy_install" \
   'guzzle_sphinx_theme==0.7.11' \
-  'sphinx_bootstrap_theme==0.6.0' \
+  'sphinx_bootstrap_theme==0.6.4' \
   'sphinx_rtd_theme==0.2.5b2'
 
 # Extract .egg files if not extracted yet.

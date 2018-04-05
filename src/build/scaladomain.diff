@@ -1,0 +1,19 @@
+diff -urN sphinxcontrib/scaladomain.py sphinxcontrib/scaladomain.py
+--- sphinxcontrib/scaladomain.py	2017-12-09 11:23:34.073819199 +0900
++++ sphinxcontrib/scaladomain.py	2017-12-09 11:24:15.413819072 +0900
+@@ -13,14 +13,13 @@
+ __release__ = '0.1a1'
+ 
+ from docutils import nodes
+-from docutils.parsers.rst import directives
++from docutils.parsers.rst import directives, Directive
+ 
+ from sphinx import addnodes
+ from sphinx.directives import ObjectDescription
+ from sphinx.domains import Domain, ObjType, Index
+ from sphinx.roles import XRefRole
+ from sphinx.util.docfields import Field, GroupedField, TypedField
+-from sphinx.util.compat import Directive
+ from sphinx.util.nodes import make_refnode
+ 
+ class ScalaPackage(Directive):
