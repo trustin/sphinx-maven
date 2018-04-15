@@ -5,8 +5,9 @@
 .. _`PlantUML`: http://plantuml.sourceforge.net/
 .. _`Thomas Dudziak`: https://github.com/tomdz/sphinx-maven
 .. _`Bala Sridhar`: https://github.com/balasridhar/sphinx-maven
-.. _`sphinxcontrib-plantuml`: https://pypi.python.org/pypi/sphinxcontrib-plantuml
+.. _`sphinxcontrib-httpdomain`: https://sphinxcontrib-httpdomain.readthedocs.io/en/stable/
 .. _`sphinxcontrib-inlinesyntaxhighlight`: http://sphinxcontrib-inlinesyntaxhighlight.readthedocs.org/en/latest/
+.. _`sphinxcontrib-plantuml`: https://pypi.python.org/pypi/sphinxcontrib-plantuml
 .. _`recommonmark`: https://recommonmark.readthedocs.org/en/latest/
 .. _`javasphinx`: http://bronto.github.io/javasphinx/
 
@@ -31,12 +32,21 @@ documentation. These plugins are:
 
 Extensions
 ----------
-Besides the extensions distributed with `Sphinx`_, this plugin includes the following extensions:
+This plugin provides the following additional extensions out of the box:
 
+- `sphinxcontrib-httpdomain`_ - Sphinx domain for documenting HTTP APIs
 - `sphinxcontrib-plantuml`_ - enables embedding `PlantUML`_ diagrams
 - `sphinxcontrib-inlinesyntaxhighlight`_ - enables syntax-highlighting inline literals
 - `recommonmark`_ - adds Markdown support
 - `javasphinx`_ - adds the Java domain
+
+Themes
+------
+This plugin provides the following additional themes out of the box:
+
+- `guzzle_sphinx_theme <https://github.com/guzzle/guzzle_sphinx_theme>`_
+- `sphinx_bootstrap_theme <http://ryan-roemer.github.io/sphinx-bootstrap-theme/>`_
+- `sphinx_rtd_theme <https://sphinx-rtd-theme.readthedocs.io/en/latest/>`_
 
 Credits and changes
 -------------------
