@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.CodeSource;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -39,7 +38,10 @@ import kr.motd.maven.os.Detector;
  */
 public final class SphinxRunner {
 
-    private static final String BINARY_TAG = "v0.1.0";
+    public static final String DEFAULT_BINARY_BASE_URL =
+            "https://github.com/trustin/sphinx-binary/releases/download/";
+    public static final String DEFAULT_BINARY_VERSION = "v0.1.0";
+
     private static final String VERSION;
     private static final String USER_AGENT;
 
@@ -57,15 +59,34 @@ public final class SphinxRunner {
         USER_AGENT = SphinxRunner.class.getSimpleName() + '/' + VERSION;
     }
 
-    private final File sphinxBinaryCacheDir;
+    private final String binaryBaseUrl;
+    private final String binaryVersion;
+    private final File binaryCacheDir;
     private final SphinxRunnerLogger logger;
     private final String plantUmlCommand;
 
-    public SphinxRunner(File sphinxBinaryCacheDir, SphinxRunnerLogger logger) {
-        this.sphinxBinaryCacheDir = requireNonNull(sphinxBinaryCacheDir, "sphinxSourceDirectory");
+    public SphinxRunner(String binaryBaseUrl, String binaryVersion,
+                        File binaryCacheDir, SphinxRunnerLogger logger) {
+
+        this.binaryBaseUrl = appendTrailingSlash(requireNonNull(binaryBaseUrl, "binaryBaseUrl"));
+        if (!binaryBaseUrl.startsWith("http://") &&
+            !binaryBaseUrl.startsWith("https://")) {
+            throw new IllegalArgumentException("binaryBaseUrl must start with 'http://' or 'https://':" +
+                                               binaryBaseUrl);
+        }
+        this.binaryVersion = requireNonNull(binaryVersion, "binaryVersion");
+        this.binaryCacheDir = requireNonNull(binaryCacheDir, "binaryCacheDir");
         this.logger = requireNonNull(logger, "logger");
         plantUmlCommand = "java -Djava.awt.headless=true -jar " +
                           findPlantUmlJar().getPath().replace("\\", "\\\\");
+    }
+
+    private static String appendTrailingSlash(String url) {
+        if (url.endsWith("/")) {
+            return url;
+        } else {
+            return url + '/';
+        }
     }
 
     public int run(File workingDir, List<String> args) {
@@ -135,7 +156,7 @@ public final class SphinxRunner {
     private Path downloadSphinxBinary() {
         final OsDetector osDetector = new OsDetector();
         final String osClassifier = osDetector.classifier();
-        final File binaryDir = new File(sphinxBinaryCacheDir, BINARY_TAG);
+        final File binaryDir = new File(binaryCacheDir, binaryVersion);
         binaryDir.mkdirs();
 
         if (!binaryDir.isDirectory()) {
@@ -153,11 +174,8 @@ public final class SphinxRunner {
             return binary;
         }
 
-        final URI binaryUri = URI.create(
-                "https://github.com/trustin/sphinx-binary/releases/download/" + BINARY_TAG + '/' + binaryName);
-        final URI sha256Uri = URI.create(
-                "https://github.com/trustin/sphinx-binary/releases/download/" + BINARY_TAG + '/' + sha256Name);
-
+        final URI binaryUri = URI.create(binaryBaseUrl + binaryVersion + '/' + binaryName);
+        final URI sha256Uri = URI.create(binaryBaseUrl + binaryVersion + '/' + sha256Name);
         Path tmpBinary = null;
         Path tmpSha256 = null;
         try {

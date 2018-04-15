@@ -20,7 +20,7 @@ public class SphinxRunnerTest {
         final File srcDir = new File(curDir, "src/site/sphinx").getCanonicalFile();
         final File dstDir = new File(curDir, "target/test-site").getCanonicalFile();
         new SphinxRunner(
-                tmpDir.getRoot(),
+                SphinxRunner.DEFAULT_BINARY_BASE_URL, SphinxRunner.DEFAULT_BINARY_VERSION, tmpDir.getRoot(),
                 new SphinxRunnerLogger() {
                     @Override
                     public void log(String msg) {

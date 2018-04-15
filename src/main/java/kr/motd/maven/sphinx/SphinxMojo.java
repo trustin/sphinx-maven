@@ -78,10 +78,22 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private File outputDirectory;
 
     /**
-     * The directory for sphinx binary.
+     * The URL of the sphinx binary repository; must start with {@code http://} or {@code https://}.
      */
-    @Parameter(property = "sphinx.sphinxBinCacheDir", defaultValue = "${settings.localRepository}/kr/motd/maven/sphinx-binary", required = true, readonly = true)
-    private File sphinxBinaryCacheDirectory;
+    @Parameter(property = "sphinx.binBaseUrl", defaultValue = SphinxRunner.DEFAULT_BINARY_BASE_URL, required = true, readonly = true)
+    private String binaryBaseUrl;
+
+    /**
+     * The URL of the sphinx binary version, e.g. {@value SphinxRunner#DEFAULT_BINARY_VERSION}.
+     */
+    @Parameter(property = "sphinx.binVersion", defaultValue = SphinxRunner.DEFAULT_BINARY_VERSION, required = true, readonly = true)
+    private String binaryVersion;
+
+    /**
+     * The directory for sphinx binary cache.
+     */
+    @Parameter(property = "sphinx.binCacheDir", defaultValue = "${settings.localRepository}/kr/motd/maven/sphinx-binary", required = true, readonly = true)
+    private File binaryCacheDir;
 
     /**
      * The builder to use. See <a href="http://sphinx.pocoo.org/man/sphinx-build.html?highlight=command%20line">sphinx-build</a>
@@ -118,7 +130,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     public void execute() throws MojoExecutionException {
         sourceDirectory = canonicalize(sourceDirectory);
         outputDirectory = canonicalize(outputDirectory);
-        sphinxBinaryCacheDirectory = canonicalize(sphinxBinaryCacheDirectory);
+        binaryCacheDir = canonicalize(binaryCacheDir);
 
         // to avoid Maven overriding resulting index.html, update index.rst to force re-building of index
         if (isHtmlReport()) {
@@ -126,12 +138,14 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         }
 
         try {
-            final SphinxRunner sphinxRunner = new SphinxRunner(sphinxBinaryCacheDirectory, new SphinxRunnerLogger() {
-                @Override
-                public void log(String msg) {
-                    getLog().info(msg);
-                }
-            });
+            final SphinxRunner sphinxRunner = new SphinxRunner(
+                    binaryBaseUrl, binaryVersion, binaryCacheDir,
+                    new SphinxRunnerLogger() {
+                        @Override
+                        public void log(String msg) {
+                            getLog().info(msg);
+                        }
+                    });
 
             getLog().info("Running Sphinx; output will be placed in " + outputDirectory);
             final List<String> args = getSphinxRunnerCmdLine();
