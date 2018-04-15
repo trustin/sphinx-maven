@@ -40,7 +40,7 @@ public final class SphinxRunner {
 
     public static final String DEFAULT_BINARY_BASE_URL =
             "https://github.com/trustin/sphinx-binary/releases/download/";
-    public static final String DEFAULT_BINARY_VERSION = "v0.1.0";
+    public static final String DEFAULT_BINARY_VERSION = "v0.1.1";
 
     private static final String VERSION;
     private static final String USER_AGENT;
