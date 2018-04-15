@@ -64,7 +64,8 @@ public final class SphinxRunner {
     public SphinxRunner(File sphinxBinaryCacheDir, SphinxRunnerLogger logger) {
         this.sphinxBinaryCacheDir = requireNonNull(sphinxBinaryCacheDir, "sphinxSourceDirectory");
         this.logger = requireNonNull(logger, "logger");
-        plantUmlCommand = "java -jar " + findPlantUmlJar().getPath().replace("\\", "\\\\");
+        plantUmlCommand = "java -Djava.awt.headless=true -jar " +
+                          findPlantUmlJar().getPath().replace("\\", "\\\\");
     }
 
     public int run(File workingDir, List<String> args) {
