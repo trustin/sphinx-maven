@@ -22,6 +22,7 @@ Parameter                Description                                            
 ``force``                Whether Sphinx should generate output for all files instead of only the changed ones.             ``false``
 ``tags``                 Additional tags to pass to Sphinx. See the `Sphinx tag documentation`_ for more information.
 ``asReport``             Whether documentation should be generated as a project report (keep default Maven site).          ``false``
+``skip``                 Whether Sphinx execution should be skipped.                                                       ``false``
 ======================== ================================================================================================= ========================================
 
 Using PlantUML
