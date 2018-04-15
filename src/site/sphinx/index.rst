@@ -44,6 +44,25 @@ This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since t
 and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting. This fork includes the following additional changes:
 
+2.0.0 (15-Apr-2018)
+^^^^^^^^^^^^^^^^^^^
+
+- Updates:
+
+  - Sphinx 1.7.2
+  - sphinxcontrib-httpdomain 1.6.1
+  - sphinxcontrib-plantuml 0.11
+  - sphinx_bootstrap_theme 0.6.5
+  - sphinx_rtd_theme 0.3.0
+
+- Removed extensions:
+
+  - sphinxcontrib-scala - seems unmaintained
+
+- Use CPython 3.6 instead of Jython
+
+  - See `sphinx-binary <https://github.com/trustin/sphinx-binary>`_ for more information.
+
 1.7.0 (03-Jan-2018)
 ^^^^^^^^^^^^^^^^^^^
 
