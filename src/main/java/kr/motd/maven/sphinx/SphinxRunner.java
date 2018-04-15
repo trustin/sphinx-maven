@@ -3,38 +3,45 @@ package kr.motd.maven.sphinx;
 import static java.util.Objects.requireNonNull;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.math.BigInteger;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.CodeSource;
-import java.util.Enumeration;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-
-import org.python.core.Py;
-import org.python.core.PyObject;
-import org.python.core.PySystemState;
-import org.python.util.PythonInterpreter;
 
 import net.sourceforge.plantuml.UmlDiagram;
+
+import kr.motd.maven.os.DetectionException;
+import kr.motd.maven.os.Detector;
 
 /**
  * Sphinx Runner.
  */
-public final class SphinxRunner implements AutoCloseable {
+public final class SphinxRunner {
 
+    private static final String BINARY_TAG = "v0.1.0";
     private static final String VERSION;
-    private static final String DIST_PREFIX =
-            SphinxRunner.class.getPackage().getName().replace('.', '/') + "/dist/";
+    private static final String USER_AGENT;
 
     static {
         final Properties versionProps = new Properties();
@@ -47,177 +54,53 @@ public final class SphinxRunner implements AutoCloseable {
         if (VERSION == null) {
             throw new IllegalStateException("cannot determine the plugin version");
         }
+        USER_AGENT = SphinxRunner.class.getSimpleName() + '/' + VERSION;
     }
 
-    private final File sphinxSourceDirectory;
+    private final File sphinxBinaryCacheDir;
     private final SphinxRunnerLogger logger;
+    private final String plantUmlCommand;
 
-    private final PySystemState sysState;
-    private final PythonInterpreter interpreter;
-    private final PyObject mainFunc;
-    private boolean run;
-
-    public SphinxRunner(File sphinxSourceDirectory, SphinxRunnerLogger logger) {
-        this.sphinxSourceDirectory = requireNonNull(sphinxSourceDirectory, "sphinxSourceDirectory");
+    public SphinxRunner(File sphinxBinaryCacheDir, SphinxRunnerLogger logger) {
+        this.sphinxBinaryCacheDir = requireNonNull(sphinxBinaryCacheDir, "sphinxSourceDirectory");
         this.logger = requireNonNull(logger, "logger");
-
-        final String plantUmlCommand = "java -jar " + findPlantUmlJar().getPath().replace("\\", "\\\\");
-        final File sphinxDirectory = extractSphinx();
-
-        PySystemState sysState = null;
-        PythonInterpreter interpreter = null;
-        boolean success = false;
-        try {
-            final long startTime = System.nanoTime();
-            logger.log("Sphinx directory: " + sphinxDirectory);
-            logger.log("PlantUML command: " + plantUmlCommand);
-            logger.log("Initializing the interpreter ..");
-
-            // use headless mode for AWT (prevent "Launcher" app on Mac OS X)
-            System.setProperty("java.awt.headless", "true");
-
-            // this setting supposedly allows GCing of jython-generated classes but I'm
-            // not sure if this setting has any effect on newer jython versions anymore
-            System.setProperty("python.options.internalTablesImpl", "weak");
-
-            sysState = new PySystemState();
-            sysState.path.append(Py.newString(sphinxDirectory.getPath()));
-            logger.log("Jython path: " + sysState.path);
-
-            // Set some necessary environment variables.
-            interpreter = new PythonInterpreter(null, sysState);
-            interpreter.exec("from os import putenv");
-            PyObject env = interpreter.get("putenv");
-
-            // Set the locale for consistency.
-            env.__call__(Py.java2py("LANG"), Py.java2py("en_US.UTF-8"));
-            env.__call__(Py.java2py("LC_ALL"), Py.java2py("en_US.UTF-8"));
-
-            // Set the command that runs PlantUML.
-            env.__call__(Py.java2py("plantuml"), Py.java2py(plantUmlCommand));
-
-            // babel/localtime/_unix.py attempts to use os.readlink() which is
-            // unavailable in some OSes. Setting the 'TZ' environment variable
-            // works around this problem.
-            env.__call__(Py.java2py("TZ"), Py.java2py("UTC"));
-
-            // Import Sphinx to preload it.
-            interpreter.exec("from sphinx.application import Sphinx as PreloadedSphinx");
-
-            // Prepare the main function.
-            interpreter.exec("from sphinx import build_main");
-            mainFunc = interpreter.get("build_main");
-            logger.log("Initialized the interpreter. Took " +
-                       TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime) + "ms.");
-
-            this.sysState = sysState;
-            this.interpreter = interpreter;
-            success = true;
-        } catch (Exception e) {
-            throw new SphinxException("Failed to initialize Sphinx: " + e, e);
-        } finally {
-            if (!success) {
-                if (interpreter != null) {
-                    interpreter.close();
-                }
-                if (sysState != null) {
-                    sysState.close();
-                }
-            }
-        }
+        plantUmlCommand = "java -jar " + findPlantUmlJar().getPath().replace("\\", "\\\\");
     }
 
-    public int run(List<String> args) {
+    public int run(File workingDir, List<String> args) {
+        requireNonNull(workingDir, "workingDir");
         requireNonNull(args, "args");
         if (args.isEmpty()) {
             throw new IllegalArgumentException("args is empty.");
         }
 
-        if (run) {
-            throw new IllegalStateException("run already");
-        }
+        final Path sphinxBinary = downloadSphinxBinary();
+        final List<String> fullArgs = new ArrayList<>();
+        fullArgs.add(sphinxBinary.toString());
+        fullArgs.addAll(args);
 
-        run = true;
+        final ProcessBuilder builder = new ProcessBuilder(fullArgs);
+        final Map<String, String> env = builder.environment();
+        builder.directory(workingDir);
+        builder.inheritIO();
+
+        // Set the locale and timezone for consistency.
+        env.put("LANG", "en_US.UTF-8");
+        env.put("LC_ALL", "en_US.UTF-8");
+        env.put("TZ", "UTC");
+        // Set the command that runs PlantUML.
+        env.put("plantuml", plantUmlCommand);
+
         try {
             final long startTime = System.nanoTime();
-            final PyObject ret = mainFunc.__call__(Py.java2py(args));
-            final int exitCode = Py.tojava(ret, Integer.class);
+            final Process process = builder.start();
+            final int exitCode = process.waitFor();
             logger.log("Sphinx exited with code " + exitCode + ". Took " +
                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime) + "ms.");
             return exitCode;
         } catch (Exception e) {
             throw new SphinxException("Failed to run Sphinx: " + e, e);
-        } finally {
-            close();
         }
-    }
-
-    @Override
-    public void close() {
-        interpreter.close();
-        sysState.close();
-    }
-
-    /**
-     * Unpack Sphinx and its dependencies into the file system.
-     */
-    private File extractSphinx() {
-        final File sphinxCacheDir = sphinxSourceDirectory;
-        sphinxCacheDir.mkdirs();
-
-        final File sphinxDir = new File(sphinxCacheDir, VERSION);
-        if (sphinxDir.isDirectory()) {
-            return sphinxDir;
-        }
-
-        try {
-            final File tmpDir = Files.createTempDirectory(sphinxCacheDir.toPath(), VERSION + ".tmp.").toFile();
-            logger.log("Extracting Sphinx into: " + tmpDir);
-
-            final JarFile jar = new JarFile(findPluginJar(), false);
-            final byte[] buf = new byte[65536];
-            for (Enumeration<JarEntry> i = jar.entries(); i.hasMoreElements(); ) {
-                final JarEntry e = i.nextElement();
-                if (!e.getName().startsWith(DIST_PREFIX)) {
-                    continue;
-                }
-
-                final File f = new File(tmpDir + File.separator +
-                                        e.getName().substring(DIST_PREFIX.length()));
-
-                if (e.isDirectory()) {
-                    if (!f.mkdirs() && !f.exists()) {
-                        throw new SphinxException("Failed to create a directory: " + f);
-                    }
-                    continue;
-                }
-
-                try (final InputStream in = jar.getInputStream(e);
-                     final OutputStream out = new FileOutputStream(f)) {
-                    for (;;) {
-                        int readBytes = in.read(buf);
-                        if (readBytes < 0) {
-                            break;
-                        }
-                        out.write(buf, 0, readBytes);
-                    }
-                }
-            }
-
-            if (!tmpDir.renameTo(sphinxDir)) {
-                throw new SphinxException("Failed to rename: " + tmpDir + " -> " + sphinxDir.getName());
-            }
-
-            return sphinxDir;
-        } catch (SphinxException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new SphinxException("Failed to extract Sphinx: " + e, e);
-        }
-    }
-
-    private File findPluginJar() {
-        return findJar(SphinxRunner.class, "the plugin JAR");
     }
 
     private File findPlantUmlJar() {
@@ -246,5 +129,228 @@ public final class SphinxRunner implements AutoCloseable {
         }
 
         return f;
+    }
+
+    private Path downloadSphinxBinary() {
+        final OsDetector osDetector = new OsDetector();
+        final String osClassifier = osDetector.classifier();
+        final File binaryDir = new File(sphinxBinaryCacheDir, BINARY_TAG);
+        binaryDir.mkdirs();
+
+        if (!binaryDir.isDirectory()) {
+            throw new SphinxException(
+                    "failed to create a cache directory: " + binaryDir);
+        }
+
+        final String ext = osDetector.isWindows() ? ".exe" : "";
+        final String binaryName = "sphinx." + osClassifier + ext;
+        final String sha256Name = binaryName + ".sha256";
+        final Path binary = new File(binaryDir, binaryName).toPath();
+        final Path sha256 = new File(binaryDir, sha256Name).toPath();
+        if (Files.exists(binary)) {
+            // Downloaded already.
+            return binary;
+        }
+
+        final URI binaryUri = URI.create(
+                "https://github.com/trustin/sphinx-binary/releases/download/" + BINARY_TAG + '/' + binaryName);
+        final URI sha256Uri = URI.create(
+                "https://github.com/trustin/sphinx-binary/releases/download/" + BINARY_TAG + '/' + sha256Name);
+
+        Path tmpBinary = null;
+        Path tmpSha256 = null;
+        try {
+            // Download the binary and sha256 checksum.
+            tmpBinary = Files.createTempFile(
+                    binary.getParent(), binaryName + '.', ".tmp",
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxr-xr-x")));
+            download(binaryUri, tmpBinary);
+            tmpSha256 = Files.createTempFile(
+                    binary.getParent(), sha256Name + '.', ".tmp",
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-r--r--")));
+            download(sha256Uri, tmpSha256);
+
+            // Make sure the sha256 checksum is valid.
+            final List<String> sha256Lines = Files.readAllLines(tmpSha256, StandardCharsets.US_ASCII);
+            if (sha256Lines.size() != 1 || !sha256Lines.get(0).matches("^[0-9a-fA-F]{64}(?:\\s.*$|$)")) {
+                throw new SphinxException("invalid content: " + sha256Uri);
+            }
+
+            final Sha256 digest = new Sha256();
+            final byte[] buffer = new byte[65536];
+            try (FileInputStream in = new FileInputStream(tmpBinary.toFile())) {
+                for (;;) {
+                    final int readBytes = in.read(buffer);
+                    if (readBytes < 0) {
+                        break;
+                    }
+                    if (readBytes != 0) {
+                        digest.update(buffer, 0, readBytes);
+                    }
+                }
+            }
+
+            final byte[] actualSha256Sum = new byte[digest.getDigestLen()];
+            digest.finishDigest(actualSha256Sum, 0);
+            if (!new BigInteger(sha256Lines.get(0), 16).equals(new BigInteger(1, actualSha256Sum))) {
+                throw new SphinxException("mismatching checksum: " + binaryUri);
+            }
+
+            // Move the downloaded and verified files to the desired locations.
+            Files.move(tmpSha256, sha256,
+                       StandardCopyOption.ATOMIC_MOVE,
+                       StandardCopyOption.REPLACE_EXISTING);
+            tmpSha256 = null;
+
+            Files.move(tmpBinary, binary,
+                       StandardCopyOption.ATOMIC_MOVE,
+                       StandardCopyOption.REPLACE_EXISTING);
+            tmpBinary = null;
+            return binary;
+        } catch (SphinxException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SphinxException("failed to download Sphinx binary at: " + binaryUri, e);
+        } finally {
+            if (tmpSha256 != null) {
+                try {
+                    Files.deleteIfExists(tmpSha256);
+                } catch (IOException e) {
+                    // Swallow.
+                }
+            }
+            if (tmpBinary != null) {
+                try {
+                    Files.deleteIfExists(tmpBinary);
+                } catch (IOException e) {
+                    // Swallow.
+                }
+            }
+        }
+    }
+
+    private void download(URI uri, Path path) {
+        URL url;
+        try {
+            url = uri.toURL();
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException(e);
+        }
+
+        for (;;) {
+            logger.log("Download " + url);
+            HttpURLConnection conn = null;
+            try {
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestProperty("Accept",
+                                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                conn.setRequestProperty("Accept-Encoding", "identity");
+                conn.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
+                conn.setRequestProperty("Cache-Control", "no-cache");
+                conn.setRequestProperty("Pragma", "no-cache");
+                conn.setRequestProperty("User-Agent", USER_AGENT);
+                conn.setUseCaches(false);
+
+                switch (conn.getResponseCode()) {
+                    case 301:
+                    case 302:
+                    case 303:
+                    case 307:
+                    case 308:
+                        // Handle redirect.
+                        final String location = conn.getHeaderField("Location");
+                        if (location == null) {
+                            throw new SphinxException(
+                                    "missing 'Location' header in a redirect response: " + url);
+                        }
+                        final URI newUri;
+                        try {
+                            newUri = URI.create(location);
+                        } catch (Exception e) {
+                            throw new SphinxException(
+                                    "invalid 'Location' header in a redirect response: " + url);
+                        }
+                        if (!newUri.isAbsolute()) {
+                            // It's valid to have a relative URL in a 'Location' header,
+                            // but we fail here to simplify the logic.
+                            throw new SphinxException(
+                                    "relative 'Location' header in a redirect response: " + url);
+                        }
+
+                        url = newUri.toURL();
+                        continue;
+                    case 200:
+                        // Handle below.
+                        break;
+                    default:
+                        throw new SphinxException(
+                                "unexpected response code '" + conn.getResponseCode() + "':" + url);
+                }
+
+                // Download the content into a new file.
+                final String contentLength = conn.getHeaderField("Content-Length");
+                long lastLogTimeNanos = System.nanoTime();
+                try (InputStream in = conn.getInputStream()) {
+                    final byte[] buffer = new byte[65536];
+                    long progress = 0;
+                    try (FileOutputStream out = new FileOutputStream(path.toFile())) {
+                        for (;;) {
+                            final int readBytes = in.read(buffer);
+                            if (readBytes < 0) {
+                                break;
+                            }
+                            if (readBytes != 0) {
+                                out.write(buffer, 0, readBytes);
+                                progress += readBytes;
+                                final long currentTimeNanos = System.nanoTime();
+                                if (currentTimeNanos - lastLogTimeNanos >= TimeUnit.SECONDS.toNanos(1)) {
+                                    logger.log("Download " + progress + '/' +
+                                               (contentLength != null ? contentLength : "?"));
+                                    lastLogTimeNanos = currentTimeNanos;
+                                }
+                            }
+                        }
+                    }
+                }
+                return;
+            } catch (SphinxException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new SphinxException("failed to download: " + url, e);
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+            }
+        }
+    }
+
+    private static class OsDetector extends Detector {
+
+        private String classifier;
+
+        String classifier() {
+            if (classifier != null) {
+                return classifier;
+            }
+
+            final Properties properties = new Properties();
+            try {
+                detect(properties, Collections.<String>emptyList());
+            } catch (DetectionException e) {
+                throw new SphinxException(e.getMessage());
+            }
+            return classifier = properties.getProperty(Detector.DETECTED_CLASSIFIER);
+        }
+
+        boolean isWindows() {
+            return classifier().startsWith("windows");
+        }
+
+        @Override
+        protected void log(String s) {}
+
+        @Override
+        protected void logProperty(String s, String s1) {}
     }
 }

@@ -78,10 +78,10 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private File outputDirectory;
 
     /**
-     * The directory for sphinx' source.
+     * The directory for sphinx binary.
      */
-    @Parameter(property = "sphinx.sphinxSrcDir", defaultValue = "${project.build.directory}/sphinx", required = true, readonly = true)
-    private File sphinxSourceDirectory;
+    @Parameter(property = "sphinx.sphinxBinCacheDir", defaultValue = "${settings.localRepository}/kr/motd/maven/sphinx-binary", required = true, readonly = true)
+    private File sphinxBinaryCacheDirectory;
 
     /**
      * The builder to use. See <a href="http://sphinx.pocoo.org/man/sphinx-build.html?highlight=command%20line">sphinx-build</a>
@@ -118,22 +118,24 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     public void execute() throws MojoExecutionException {
         sourceDirectory = canonicalize(sourceDirectory);
         outputDirectory = canonicalize(outputDirectory);
-        sphinxSourceDirectory = canonicalize(sphinxSourceDirectory);
+        sphinxBinaryCacheDirectory = canonicalize(sphinxBinaryCacheDirectory);
 
         // to avoid Maven overriding resulting index.html, update index.rst to force re-building of index
         if (isHtmlReport()) {
             new File(sourceDirectory.getPath() + "/index.rst").setLastModified(System.currentTimeMillis());
         }
 
-        try (final SphinxRunner sphinxRunner = new SphinxRunner(sphinxSourceDirectory, new SphinxRunnerLogger() {
-            @Override
-            public void log(String msg) {
-                getLog().debug(msg);
-            }
-        })) {
+        try {
+            final SphinxRunner sphinxRunner = new SphinxRunner(sphinxBinaryCacheDirectory, new SphinxRunnerLogger() {
+                @Override
+                public void log(String msg) {
+                    getLog().info(msg);
+                }
+            });
+
             getLog().info("Running Sphinx; output will be placed in " + outputDirectory);
             final List<String> args = getSphinxRunnerCmdLine();
-            if (sphinxRunner.run(args) != 0) {
+            if (sphinxRunner.run(sourceDirectory, args) != 0) {
                 throw new MavenReportException("Sphinx report generation failed");
             }
 
