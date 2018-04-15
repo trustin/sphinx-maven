@@ -47,6 +47,7 @@ heavy lifting. This fork includes the following additional changes:
 2.0.0 (15-Apr-2018)
 ^^^^^^^^^^^^^^^^^^^
 
+- Added ``skip`` option (`@joschi <https://github.com/joschi>`_)
 - Updates:
 
   - Sphinx 1.7.2
