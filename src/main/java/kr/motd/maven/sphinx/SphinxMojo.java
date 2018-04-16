@@ -40,7 +40,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private String description;
 
     /**
-     * Sub-directory to store sphinx output (used only if asReport is true)
+     * Sub-directory to store Sphinx output (used only if {@code asReport} is true)
      */
     private static final String sphinxSiteSubDirectory = "sphinx";
 
@@ -78,32 +78,35 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private File outputDirectory;
 
     /**
-     * The URL of the sphinx binary repository; must start with {@code http://} or {@code https://}.
+     * The base URL of the Sphinx binary, which will be used when downloading the Sphinx binary; must start
+     * with {@code http://} or {@code https://}.
      */
     @Parameter(property = "sphinx.binBaseUrl", defaultValue = SphinxRunner.DEFAULT_BINARY_BASE_URL, required = true, readonly = true)
     private String binaryBaseUrl;
 
     /**
-     * The URL of the sphinx binary version, e.g. {@value SphinxRunner#DEFAULT_BINARY_VERSION}.
+     * The Sphinx binary version, which will be used when downloading the Sphinx binary, e.g.
+     * {@value SphinxRunner#DEFAULT_BINARY_VERSION}.
      */
     @Parameter(property = "sphinx.binVersion", defaultValue = SphinxRunner.DEFAULT_BINARY_VERSION, required = true, readonly = true)
     private String binaryVersion;
 
     /**
-     * The directory for sphinx binary cache.
+     * The directory for Sphinx binary cache.
      */
     @Parameter(property = "sphinx.binCacheDir", defaultValue = "${settings.localRepository}/kr/motd/maven/sphinx-binary", required = true, readonly = true)
     private File binaryCacheDir;
 
     /**
-     * The builder to use. See <a href="http://sphinx.pocoo.org/man/sphinx-build.html?highlight=command%20line">sphinx-build</a>
+     * The builder to use. See <a href="http://www.sphinx-doc.org/en/master/builders.html">Available builders</a>
      * for a list of supported builders.
      */
     @Parameter(property = "sphinx.builder", required = true, alias = "builder", defaultValue = "html")
     private String builder;
 
     /**
-     * The <a href="http://sphinx.pocoo.org/markup/misc.html#tags">tags</a> to pass to the sphinx build.
+     * The <a href="http://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#tags">tags</a>
+     * to pass to Sphinx.
      */
     @Parameter(property = "sphinx.tags", alias = "tags")
     private List<String> tags;

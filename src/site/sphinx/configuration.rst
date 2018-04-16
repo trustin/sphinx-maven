@@ -1,6 +1,5 @@
-.. _`Sphinx commandline documentation`: http://sphinx.pocoo.org/man/sphinx-build.html?highlight=command%20line
-.. _`Sphinx tag documentation`: http://sphinx.pocoo.org/markup/misc.html#tags
-.. _`Jython`: http://www.jython.org/
+.. _`Available builders`: http://www.sphinx-doc.org/en/master/builders.html
+.. _`Including content based on tags`: http://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#tags
 .. _`GraphViz`: http://www.graphviz.org
 
 Configuration
@@ -16,11 +15,11 @@ Parameter                Description                                            
 ``outputName``           The base name used to create the report's output file(s).                                         ``Python-Sphinx``
 ``name``                 The name of the report.                                                                           ``Sphinx-Docs``
 ``description``          The description of the report.                                                                    ``Documentation via sphinx``
-``builder``              The builder to use. See the `Sphinx commandline documentation`_ for a list of possible builders.  ``html``
+``builder``              The builder to use. See `Available builders`_ for a list of possible builders.                    ``html``
 ``verbose``              Whether Sphinx should generate verbose output.                                                    ``true``
 ``warningsAsErrors``     Whether warnings should be treated as errors.                                                     ``false``
 ``force``                Whether Sphinx should generate output for all files instead of only the changed ones.             ``false``
-``tags``                 Additional tags to pass to Sphinx. See the `Sphinx tag documentation`_ for more information.
+``tags``                 Additional tags to pass to Sphinx. See `Including content based on tags`_ for more information.
 ``asReport``             Whether documentation should be generated as a project report (keep default Maven site).          ``false``
 ``skip``                 Whether Sphinx execution should be skipped.                                                       ``false``
 ======================== ================================================================================================= ========================================
@@ -36,7 +35,7 @@ place where the UML was defined in the reStructured Text source file. As mention
 GraphViz
 --------
 
-GraphViz is a software package of opensource tools for drawing graphs described in DOT language scripts. More
+GraphViz is a software package of open source tools for drawing graphs described in DOT language scripts. More
 information regarding `GraphViz`_ can be found in their website. Windows installer can be downloaded from the
 website and the package is available as part of package management provided by the individual operating system
 vendor.
@@ -199,16 +198,6 @@ will be rendered as:
        :resheader Content-Type: this depends on :mailheader:`Accept` header of request
    :statuscode 200: no error
        :statuscode 404: there's no user
-
-A note on memory usage
-======================
-Sphinx is run via `Jython`_ which will generate lots of small classes for various Python constructs. This means
-that the plugin will use a fair amount of memory, especially PermGen space (a moderate plugin run will likely
-use about 80mb of PermGen space). Therefore we suggest to either run maven with at least 256mb of heap and
-128mb of PermGen space::
-
-    MAVEN_OPTS="-Xmx256m -XX:MaxPermSize=128m" mvn site
-
 
 Sample Documentation Config
 ===========================

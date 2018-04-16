@@ -1,6 +1,6 @@
 .. _`Maven site plugin`: http://maven.apache.org/plugins/maven-site-plugin/
-.. _`Sphinx`: http://sphinx.pocoo.org/
-.. _`reStructured Text`: http://docutils.sf.net/rst.html
+.. _`Sphinx`: http://www.sphinx-doc.org/
+.. _`reStructured Text`: http://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
 .. _`Markdown`: http://daringfireball.net/projects/markdown/
 .. _`PlantUML`: http://plantuml.sourceforge.net/
 .. _`Thomas Dudziak`: https://github.com/tomdz/sphinx-maven
