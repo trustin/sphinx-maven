@@ -13,22 +13,13 @@
 
 sphinx-maven-plugin
 ===================
-The *sphinx-maven-plugin* is a `Maven site plugin`_ that uses `Sphinx`_ to generate the main documentation.
-Sphinx itself was originally created by the Python community for the new Python documentation. It uses a
-plain text format called `reStructured Text`_ which it then compiles into a variety of documentation formats
-such as HTML, LaTeX (for PDF), epub. reStructured Text is similar to `Markdown`_ but - at least via Sphinx -
+*sphinx-maven-plugin* is a `Maven site plugin`_ that uses `Sphinx`_ to generate a project web site or
+documentation.
+
+Sphinx itself was originally created by the Python community for the new Python documentation. It uses
+a plaintext format called `reStructured Text`_ which it then compiles into a variety of documentation formats
+such as HTML, LaTeX (for PDF) and ePub. reStructured Text is similar to `Markdown`_ but - at least via Sphinx -
 has better support for multi-page documentation.
-
-The *sphinx-maven-plugin* is BSD licensed just as Sphinx itself is. The plugin was created for Java-based
-applications. The idea was to introduce the benefits of reStructured Text format and Sphinx documentation
-generator for generating documentation for custom applications.
-
-.. Explain what comes along with this plugin. ..
-
-This plugin contains the python packages and its dependencies that are needed to generate the documentation
-using `Sphinx`_. The plugin only supports the default themes that come along with `Sphinx`_ python package.
-It also incorporates other open source plugins that are helpful while explaining complex concepts within
-documentation. These plugins are:
 
 Extensions
 ----------
@@ -48,6 +39,10 @@ This plugin provides the following additional themes out of the box:
 - `sphinx_bootstrap_theme <http://ryan-roemer.github.io/sphinx-bootstrap-theme/>`_
 - `sphinx_rtd_theme <https://sphinx-rtd-theme.readthedocs.io/en/latest/>`_
 
+License
+-------
+`Apache License, Version 2.0 <https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)>`_
+
 Changelog
 ---------
 See `the GitHub releases page <https://github.com/trustin/sphinx-maven-plugin/releases>`_.
@@ -66,3 +61,5 @@ Read more
    basic-usage
    configuration
    faq
+   Release notes <https://github.com/trustin/sphinx-maven-plugin/releases>
+   Fork me at GitHub <https://github.com/trustin/sphinx-maven-plugin>
