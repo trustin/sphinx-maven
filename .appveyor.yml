@@ -7,8 +7,8 @@ environment:
     - APPVEYOR_BITS: 32
     - APPVEYOR_BITS: 64
 cache:
-  - '%HOME%\.m2\repository'
-  - '%HOME%\.m2\wrapper'
+  - '%USERPROFILE%\.m2\repository'
+  - '%USERPROFILE%\.m2\wrapper'
 init:
   - git config --global core.autocrlf true
 build:
@@ -16,7 +16,7 @@ build:
 build_script:
   - 'mvnw.cmd clean install'
   - 'mvnw.cmd site'
-  - 'RD /S /Q %HOME%\.m2\repository\kr\motd\maven\sphinx-maven-plugin'
+  - 'RD /S /Q %USERPROFILE%\.m2\repository\kr\motd\maven\sphinx-maven-plugin'
 test: off
 matrix:
   fast_finish: true
