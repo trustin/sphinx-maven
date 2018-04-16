@@ -8,6 +8,7 @@ import java.io.FileOutputStream;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
@@ -36,7 +37,7 @@ import kr.motd.maven.os.Detector;
 /**
  * Sphinx Runner.
  */
-public final class SphinxRunner {
+public class SphinxRunner {
 
     public static final String DEFAULT_BINARY_BASE_URL =
             "https://github.com/trustin/sphinx-binary/releases/download/";
@@ -91,7 +92,7 @@ public final class SphinxRunner {
         }
     }
 
-    public int run(File workingDir, List<String> args) {
+    public final int run(File workingDir, List<String> args) {
         requireNonNull(workingDir, "workingDir");
         requireNonNull(args, "args");
         if (args.isEmpty()) {
@@ -106,7 +107,7 @@ public final class SphinxRunner {
         final ProcessBuilder builder = new ProcessBuilder(fullArgs);
         final Map<String, String> env = builder.environment();
         builder.directory(workingDir);
-        builder.inheritIO();
+        configureProcessBuilder(builder);
 
         // Set the locale and timezone for consistency.
         env.put("LANG", "en_US.UTF-8");
@@ -118,12 +119,77 @@ public final class SphinxRunner {
         try {
             final long startTime = System.nanoTime();
             final Process process = builder.start();
+            process.getOutputStream().close();
+            redirect(process.getInputStream(), process.getErrorStream());
+
             final int exitCode = process.waitFor();
             logger.log("Sphinx exited with code " + exitCode + ". Took " +
                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime) + "ms.");
             return exitCode;
         } catch (Exception e) {
             throw new SphinxException("Failed to run Sphinx: " + e, e);
+        }
+    }
+
+    protected void configureProcessBuilder(ProcessBuilder builder) {}
+
+    private void redirect(final InputStream stdout, final InputStream stderr) {
+        if (stdout != null) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        redirectStdout(stdout);
+                    } catch (Throwable t) {
+                        logger.log("Failed to redirect stdout: " + t);
+                    } finally {
+                        try {
+                            stdout.close();
+                        } catch (IOException e) {
+                            // Swallow.
+                        }
+                    }
+                }
+            }, "sphinx-redirect-stdout").start();
+        }
+        if (stderr != null) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        redirectStderr(stderr);
+                    } catch (Throwable t) {
+                        logger.log("Failed to redirect stderr: " + t);
+                    } finally {
+                        try {
+                            stdout.close();
+                        } catch (IOException e) {
+                            // Swallow.
+                        }
+                    }
+                }
+            }, "sphinx-redirect-stderr").start();
+        }
+    }
+
+    protected void redirectStdout(InputStream stdout) throws Exception {
+        redirect(stdout, System.out);
+    }
+
+    protected void redirectStderr(InputStream stderr) throws Exception {
+        redirect(stderr, System.out);
+    }
+
+    protected void redirect(InputStream in, OutputStream out) throws Exception {
+        final byte[] buf = new byte[8192];
+        for (;;) {
+            final int readBytes = in.read(buf);
+            if (readBytes < 0) {
+                break;
+            }
+            if (readBytes > 0) {
+                out.write(buf, 0, readBytes);
+            }
         }
     }
 
