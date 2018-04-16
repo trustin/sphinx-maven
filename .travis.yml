@@ -1,0 +1,17 @@
+language: generic
+sudo: false
+dist: trusty
+os:
+  - linux
+  - osx
+cache:
+  directories:
+    - "$HOME/.m2/repository"
+    - "$HOME/.m2/wrapper"
+script:
+  - ./mvnw install
+  - ./mvnw site
+before_cache:
+  - rm -fr "$HOME/.m2/repository/kr/motd/maven/sphinx-maven-plugin"
+notifications:
+  email: false
