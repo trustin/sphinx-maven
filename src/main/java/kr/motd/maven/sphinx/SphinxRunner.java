@@ -59,6 +59,7 @@ public final class SphinxRunner {
         USER_AGENT = SphinxRunner.class.getSimpleName() + '/' + VERSION;
     }
 
+    private final OsDetector osDetector;
     private final String binaryBaseUrl;
     private final String binaryVersion;
     private final File binaryCacheDir;
@@ -68,6 +69,7 @@ public final class SphinxRunner {
     public SphinxRunner(String binaryBaseUrl, String binaryVersion,
                         File binaryCacheDir, SphinxRunnerLogger logger) {
 
+        osDetector = new OsDetector();
         this.binaryBaseUrl = appendTrailingSlash(requireNonNull(binaryBaseUrl, "binaryBaseUrl"));
         if (!binaryBaseUrl.startsWith("http://") &&
             !binaryBaseUrl.startsWith("https://")) {
@@ -154,7 +156,6 @@ public final class SphinxRunner {
     }
 
     private Path downloadSphinxBinary() {
-        final OsDetector osDetector = new OsDetector();
         final String osClassifier = osDetector.classifier();
         final File binaryDir = new File(binaryCacheDir, binaryVersion);
         binaryDir.mkdirs();
@@ -180,13 +181,9 @@ public final class SphinxRunner {
         Path tmpSha256 = null;
         try {
             // Download the binary and sha256 checksum.
-            tmpBinary = Files.createTempFile(
-                    binary.getParent(), binaryName + '.', ".tmp",
-                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxr-xr-x")));
+            tmpBinary = newTempExecutableFile(binary.getParent(), binaryName);
             download(binaryUri, tmpBinary);
-            tmpSha256 = Files.createTempFile(
-                    binary.getParent(), sha256Name + '.', ".tmp",
-                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-r--r--")));
+            tmpSha256 = newTempRegularFile(binary.getParent(), sha256Name);
             download(sha256Uri, tmpSha256);
 
             // Make sure the sha256 checksum is valid.
@@ -245,6 +242,26 @@ public final class SphinxRunner {
                     // Swallow.
                 }
             }
+        }
+    }
+
+    private Path newTempExecutableFile(Path dir, String name) throws IOException {
+        if (osDetector.isWindows()) {
+            return Files.createTempFile(dir, name + '.', ".tmp");
+        } else {
+            return Files.createTempFile(
+                    dir, name + '.', ".tmp",
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxr-xr-x")));
+        }
+    }
+
+    private Path newTempRegularFile(Path dir, String name) throws IOException {
+        if (osDetector.isWindows()) {
+            return Files.createTempFile(dir, name + '.', ".tmp");
+        } else {
+            return Files.createTempFile(
+                    dir, name + '.', ".tmp",
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-r--r--")));
         }
     }
 
