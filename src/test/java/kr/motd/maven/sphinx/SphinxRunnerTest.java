@@ -2,26 +2,23 @@ package kr.motd.maven.sphinx;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 public class SphinxRunnerTest {
-
-    @ClassRule
-    public static final TemporaryFolder tmpDir = new TemporaryFolder();
-
     @Test
-    @Ignore
     public void test() throws Exception {
         final File curDir = new File(".").getCanonicalFile();
         final File srcDir = new File(curDir, "src/site/sphinx").getCanonicalFile();
         final File dstDir = new File(curDir, "target/test-site").getCanonicalFile();
+        final Map<String, String> env = new HashMap<>();
+        env.put("ENV_FOO", "bar");
         new SphinxRunner(
-                SphinxRunner.DEFAULT_BINARY_BASE_URL, SphinxRunner.DEFAULT_BINARY_VERSION, tmpDir.getRoot(),
-                new SphinxRunnerLogger() {
+                SphinxRunner.DEFAULT_BINARY_BASE_URL, SphinxRunner.DEFAULT_BINARY_VERSION,
+                new File(System.getProperty("user.home") + "/.m2/repository/kr/motd/maven/sphinx-binary").getCanonicalFile(),
+                env, null, new SphinxRunnerLogger() {
                     @Override
                     public void log(String msg) {
                         System.err.println(msg);

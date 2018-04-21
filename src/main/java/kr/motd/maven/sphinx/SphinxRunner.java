@@ -23,6 +23,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,6 +43,7 @@ public class SphinxRunner {
     public static final String DEFAULT_BINARY_BASE_URL =
             "https://github.com/trustin/sphinx-binary/releases/download/";
     public static final String DEFAULT_BINARY_VERSION = "v0.1.1";
+    public static final String DOT_UNSPECIFIED = "\n\t\t\n\t\t\n\000\001\002\n\t\t\t\t\n";
 
     private static final String VERSION;
     private static final String USER_AGENT;
@@ -64,11 +66,12 @@ public class SphinxRunner {
     private final String binaryBaseUrl;
     private final String binaryVersion;
     private final File binaryCacheDir;
+    private final Map<String, String> environments;
     private final SphinxRunnerLogger logger;
     private final String plantUmlCommand;
 
-    public SphinxRunner(String binaryBaseUrl, String binaryVersion,
-                        File binaryCacheDir, SphinxRunnerLogger logger) {
+    public SphinxRunner(String binaryBaseUrl, String binaryVersion, File binaryCacheDir,
+                        Map<String, String> environments, String dotBinary, SphinxRunnerLogger logger) {
 
         osDetector = new OsDetector();
         this.binaryBaseUrl = appendTrailingSlash(requireNonNull(binaryBaseUrl, "binaryBaseUrl"));
@@ -80,8 +83,19 @@ public class SphinxRunner {
         this.binaryVersion = requireNonNull(binaryVersion, "binaryVersion");
         this.binaryCacheDir = requireNonNull(binaryCacheDir, "binaryCacheDir");
         this.logger = requireNonNull(logger, "logger");
-        plantUmlCommand = "java -Djava.awt.headless=true -jar " +
-                          findPlantUmlJar().getPath().replace("\\", "\\\\");
+        this.environments = new HashMap<>(requireNonNull(environments, "environments"));
+
+        final StringBuilder plantUmlCommandBuf = new StringBuilder();
+        plantUmlCommandBuf.append("java ");
+        plantUmlCommandBuf.append("-Djava.awt.headless=true ");
+        plantUmlCommandBuf.append("-jar ");
+        plantUmlCommandBuf.append(findPlantUmlJar().getPath().replace("\\", "\\\\"));
+        if (dotBinary != null) {
+            plantUmlCommandBuf.append(" -graphvizdot ");
+            plantUmlCommandBuf.append(dotBinary.replace("\\", "\\\\"));
+        }
+
+        plantUmlCommand = plantUmlCommandBuf.toString();
     }
 
     private static String appendTrailingSlash(String url) {
@@ -115,6 +129,7 @@ public class SphinxRunner {
         env.put("TZ", "UTC");
         // Set the command that runs PlantUML.
         env.put("plantuml", plantUmlCommand);
+        env.putAll(environments);
 
         try {
             final long startTime = System.nanoTime();
@@ -193,11 +208,11 @@ public class SphinxRunner {
         }
     }
 
-    private File findPlantUmlJar() {
+    private static File findPlantUmlJar() {
         return findJar(UmlDiagram.class, "PlantUML JAR");
     }
 
-    private File findJar(Class<?> type, String name) {
+    private static File findJar(Class<?> type, String name) {
         final CodeSource codeSource = type.getProtectionDomain().getCodeSource();
         if (codeSource == null) {
             throw new SphinxException(
@@ -205,7 +220,6 @@ public class SphinxRunner {
         }
 
         final URL url = codeSource.getLocation();
-        logger.log(name + ": " + url);
         if (!"file".equals(url.getProtocol()) || !url.getPath().toLowerCase(Locale.US).endsWith(".jar")) {
             throw new SphinxException(
                     "failed to get the location of " + name + " (unexpected URL: " + url + ')');

@@ -3,8 +3,10 @@ package kr.motd.maven.sphinx;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -98,6 +100,18 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private File binaryCacheDir;
 
     /**
+     * The environment variables to set when launching Sphinx.
+     */
+    @Parameter(property = "sphinx.env", readonly = true)
+    private Map<String, String> environments = Collections.emptyMap();
+
+    /**
+     * The path to Graphviz {@code dot} binary.
+     */
+    @Parameter(property = "sphinx.dotBin", readonly = true)
+    private String dotBinary;
+
+    /**
      * The builder to use. See <a href="http://www.sphinx-doc.org/en/master/builders.html">Available builders</a>
      * for a list of supported builders.
      */
@@ -153,7 +167,8 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
         try {
             final SphinxRunner sphinxRunner = new SphinxRunner(
-                    binaryBaseUrl, binaryVersion, binaryCacheDir,
+                    binaryBaseUrl, binaryVersion, binaryCacheDir, environments,
+                    "".equals(dotBinary) ? null : dotBinary,
                     new SphinxRunnerLogger() {
                         @Override
                         public void log(String msg) {

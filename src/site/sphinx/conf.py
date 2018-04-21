@@ -4,6 +4,9 @@ import sys, os
 from recommonmark.parser import CommonMarkParser
 import yaml
 
+# Ensure environment variables are passed.
+assert os.getenv('ENV_FOO') == 'bar'
+
 # Ensure tags are passed.
 assert tags.has('tagFoo')
 assert tags.has('tagBar')
@@ -17,8 +20,8 @@ with open('test.yaml', 'r') as stream:
 
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'
-version = '2.0'
-release = '2.0.2'
+version = '2.1'
+release = '2.1.0'
 
 # General options
 needs_sphinx = '1.0'
