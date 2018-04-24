@@ -35,7 +35,6 @@ Themes
 ------
 This plugin provides the following additional themes out of the box:
 
-- `guzzle_sphinx_theme <https://github.com/guzzle/guzzle_sphinx_theme>`_
 - `sphinx_bootstrap_theme <http://ryan-roemer.github.io/sphinx-bootstrap-theme/>`_
 - `sphinx_rtd_theme <https://sphinx-rtd-theme.readthedocs.io/en/latest/>`_
 
