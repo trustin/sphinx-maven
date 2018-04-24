@@ -40,10 +40,11 @@ import kr.motd.maven.os.Detector;
  */
 public class SphinxRunner {
 
-    public static final String DEFAULT_BINARY_BASE_URL =
-            "https://github.com/trustin/sphinx-binary/releases/download/";
-    public static final String DEFAULT_BINARY_VERSION = "v0.1.1";
-    public static final String DOT_UNSPECIFIED = "\n\t\t\n\t\t\n\000\001\002\n\t\t\t\t\n";
+    private static final OsDetector osDetector = new OsDetector();
+
+    public static final String DEFAULT_BINARY_URL =
+            "https://github.com/trustin/sphinx-binary/releases/download/v0.2.0/sphinx." +
+            osDetector.executableSuffix();
 
     private static final String VERSION;
     private static final String USER_AGENT;
@@ -62,25 +63,22 @@ public class SphinxRunner {
         USER_AGENT = SphinxRunner.class.getSimpleName() + '/' + VERSION;
     }
 
-    private final OsDetector osDetector;
-    private final String binaryBaseUrl;
-    private final String binaryVersion;
+    private final String binaryUrl;
     private final File binaryCacheDir;
     private final Map<String, String> environments;
     private final SphinxRunnerLogger logger;
     private final String plantUmlCommand;
 
-    public SphinxRunner(String binaryBaseUrl, String binaryVersion, File binaryCacheDir,
+    public SphinxRunner(String binaryUrl, File binaryCacheDir,
                         Map<String, String> environments, String dotBinary, SphinxRunnerLogger logger) {
 
-        osDetector = new OsDetector();
-        this.binaryBaseUrl = appendTrailingSlash(requireNonNull(binaryBaseUrl, "binaryBaseUrl"));
-        if (!binaryBaseUrl.startsWith("http://") &&
-            !binaryBaseUrl.startsWith("https://")) {
-            throw new IllegalArgumentException("binaryBaseUrl must start with 'http://' or 'https://':" +
-                                               binaryBaseUrl);
+        this.binaryUrl = requireNonNull(binaryUrl, "binaryUrl");
+        if (!binaryUrl.startsWith("http://") &&
+            !binaryUrl.startsWith("https://") &&
+            !binaryUrl.startsWith("file:")) {
+            throw new IllegalArgumentException("binaryUrl must start with 'file:', 'http://' or 'https://':" +
+                                               binaryUrl);
         }
-        this.binaryVersion = requireNonNull(binaryVersion, "binaryVersion");
         this.binaryCacheDir = requireNonNull(binaryCacheDir, "binaryCacheDir");
         this.logger = requireNonNull(logger, "logger");
         this.environments = new HashMap<>(requireNonNull(environments, "environments"));
@@ -96,14 +94,6 @@ public class SphinxRunner {
         }
 
         plantUmlCommand = plantUmlCommandBuf.toString();
-    }
-
-    private static String appendTrailingSlash(String url) {
-        if (url.endsWith("/")) {
-            return url;
-        } else {
-            return url + '/';
-        }
     }
 
     public final int run(File workingDir, List<String> args) {
@@ -236,8 +226,24 @@ public class SphinxRunner {
     }
 
     private Path downloadSphinxBinary() {
-        final String osClassifier = osDetector.classifier();
-        final File binaryDir = new File(binaryCacheDir, binaryVersion);
+        if (binaryUrl.startsWith("file:")) {
+            URL url = null;
+            File f = null;
+            try {
+                url = new URL(binaryUrl);
+                f = new File(url.toURI());
+            } catch (Exception ignored) {
+                if (url != null) {
+                    f = new File(url.getPath());
+                }
+            }
+            if (f == null || !f.exists()) {
+                throw new SphinxException("failed to locate Sphinx binary: " + binaryUrl);
+            }
+            return f.toPath();
+        }
+
+        final File binaryDir = new File(binaryCacheDir, binaryUrl.replaceAll("[/\\\\<>:\"|?*]", "_"));
         binaryDir.mkdirs();
 
         if (!binaryDir.isDirectory()) {
@@ -245,8 +251,7 @@ public class SphinxRunner {
                     "failed to create a cache directory: " + binaryDir);
         }
 
-        final String ext = osDetector.isWindows() ? ".exe" : "";
-        final String binaryName = "sphinx." + osClassifier + ext;
+        final String binaryName = "sphinx." + osDetector.executableSuffix();
         final String sha256Name = binaryName + ".sha256";
         final Path binary = new File(binaryDir, binaryName).toPath();
         final Path sha256 = new File(binaryDir, sha256Name).toPath();
@@ -255,8 +260,8 @@ public class SphinxRunner {
             return binary;
         }
 
-        final URI binaryUri = URI.create(binaryBaseUrl + binaryVersion + '/' + binaryName);
-        final URI sha256Uri = URI.create(binaryBaseUrl + binaryVersion + '/' + sha256Name);
+        final URI binaryUri = URI.create(binaryUrl);
+        final URI sha256Uri = URI.create(binaryUrl + ".sha256");
         Path tmpBinary = null;
         Path tmpSha256 = null;
         try {
@@ -325,7 +330,7 @@ public class SphinxRunner {
         }
     }
 
-    private Path newTempExecutableFile(Path dir, String name) throws IOException {
+    private static Path newTempExecutableFile(Path dir, String name) throws IOException {
         if (osDetector.isWindows()) {
             return Files.createTempFile(dir, name + '.', ".tmp");
         } else {
@@ -335,7 +340,7 @@ public class SphinxRunner {
         }
     }
 
-    private Path newTempRegularFile(Path dir, String name) throws IOException {
+    private static Path newTempRegularFile(Path dir, String name) throws IOException {
         if (osDetector.isWindows()) {
             return Files.createTempFile(dir, name + '.', ".tmp");
         } else {
@@ -445,7 +450,19 @@ public class SphinxRunner {
 
         private String classifier;
 
-        String classifier() {
+        boolean isWindows() {
+            return classifier().startsWith("windows");
+        }
+
+        String executableSuffix() {
+            if (isWindows()) {
+                return classifier() + ".exe";
+            } else {
+                return classifier();
+            }
+        }
+
+        private String classifier() {
             if (classifier != null) {
                 return classifier;
             }
@@ -457,10 +474,6 @@ public class SphinxRunner {
                 throw new SphinxException(e.getMessage());
             }
             return classifier = properties.getProperty(Detector.DETECTED_CLASSIFIER);
-        }
-
-        boolean isWindows() {
-            return classifier().startsWith("windows");
         }
 
         @Override

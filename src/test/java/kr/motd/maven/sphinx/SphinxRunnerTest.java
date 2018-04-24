@@ -16,7 +16,7 @@ public class SphinxRunnerTest {
         final Map<String, String> env = new HashMap<>();
         env.put("ENV_FOO", "bar");
         new SphinxRunner(
-                SphinxRunner.DEFAULT_BINARY_BASE_URL, SphinxRunner.DEFAULT_BINARY_VERSION,
+                SphinxRunner.DEFAULT_BINARY_URL,
                 new File(System.getProperty("user.home") + "/.m2/repository/kr/motd/maven/sphinx-binary").getCanonicalFile(),
                 env, null, new SphinxRunnerLogger() {
                     @Override

@@ -83,15 +83,8 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
      * The base URL of the Sphinx binary, which will be used when downloading the Sphinx binary; must start
      * with {@code http://} or {@code https://}.
      */
-    @Parameter(property = "sphinx.binBaseUrl", defaultValue = SphinxRunner.DEFAULT_BINARY_BASE_URL, required = true, readonly = true)
-    private String binaryBaseUrl;
-
-    /**
-     * The Sphinx binary version, which will be used when downloading the Sphinx binary, e.g.
-     * {@value SphinxRunner#DEFAULT_BINARY_VERSION}.
-     */
-    @Parameter(property = "sphinx.binVersion", defaultValue = SphinxRunner.DEFAULT_BINARY_VERSION, required = true, readonly = true)
-    private String binaryVersion;
+    @Parameter(property = "sphinx.binUrl", readonly = true)
+    private String binaryUrl = SphinxRunner.DEFAULT_BINARY_URL;
 
     /**
      * The directory for Sphinx binary cache.
@@ -167,7 +160,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
         try {
             final SphinxRunner sphinxRunner = new SphinxRunner(
-                    binaryBaseUrl, binaryVersion, binaryCacheDir, environments,
+                    binaryUrl, binaryCacheDir, environments,
                     "".equals(dotBinary) ? null : dotBinary,
                     new SphinxRunnerLogger() {
                         @Override
