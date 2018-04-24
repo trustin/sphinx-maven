@@ -76,7 +76,7 @@ public class SphinxRunner {
         if (!binaryUrl.startsWith("http://") &&
             !binaryUrl.startsWith("https://") &&
             !binaryUrl.startsWith("file:")) {
-            throw new IllegalArgumentException("binaryUrl must start with 'file:', 'http://' or 'https://':" +
+            throw new IllegalArgumentException("binaryUrl must start with 'file:', 'http://' or 'https://': " +
                                                binaryUrl);
         }
         this.binaryCacheDir = requireNonNull(binaryCacheDir, "binaryCacheDir");
