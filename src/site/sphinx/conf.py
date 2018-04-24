@@ -20,8 +20,8 @@ with open('test.yaml', 'r') as stream:
 
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'
-version = '2.1'
-release = '2.1.0'
+version = '2.2'
+release = '2.2.0'
 
 # General options
 needs_sphinx = '1.0'

@@ -12,6 +12,7 @@ Parameter                Description                                            
 ======================== ================================================================================================= ========================================
 ``sourceDirectory``      The directory containing the documentation source.                                                ``${basedir}/src/site/sphinx``
 ``outputDirectory``      The directory where the generated output will be placed.                                          ``${project.reporting.outputDirectory}``
+``binaryUrl``            The URL of the Sphinx executable binary. Must start with ``file:``, ``http:`` or ``https:``       <automatic>
 ``environments``         The environment variables to set when launching Sphinx. e.g. ``<VAR1>x</VAR1><VAR2>y</VAR2>``
 ``dotBinary``            The path of Graphviz ``dot`` binary. e.g. ``/opt/graphviz/bin/dot``
 ``outputName``           The base name used to create the report's output file(s).                                         ``Python-Sphinx``
