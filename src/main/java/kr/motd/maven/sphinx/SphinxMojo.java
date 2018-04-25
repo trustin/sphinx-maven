@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -15,6 +16,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.reporting.MavenReport;
 import org.apache.maven.reporting.MavenReportException;
+import org.apache.maven.settings.Proxy;
 import org.codehaus.doxia.sink.Sink;
 
 /**
@@ -22,6 +24,9 @@ import org.codehaus.doxia.sink.Sink;
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.SITE, requiresReports = true)
 public class SphinxMojo extends AbstractMojo implements MavenReport {
+
+    @Parameter( defaultValue = "${session}", readonly = true )
+    private MavenSession session;
 
     /**
      * Boolean to keep default site and make Sphinx doc a project report
@@ -156,6 +161,27 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         // to avoid Maven overriding resulting index.html, update index.rst to force re-building of index
         if (isHtmlReport()) {
             new File(sourceDirectory.getPath() + "/index.rst").setLastModified(System.currentTimeMillis());
+        }
+
+
+        // Configure the proxy-related system properties.
+        if (session != null) {
+            final Proxy proxy = session.getSettings().getActiveProxy();
+            if (proxy != null) {
+                final String protocol = proxy.getProtocol();
+                if (protocol != null && protocol.length() > 0) {
+                    System.setProperty(protocol + ".proxyHost", proxy.getHost());
+                    System.setProperty(protocol + ".proxyPort", String.valueOf(proxy.getPort()));
+                    if (proxy.getUsername() != null && proxy.getPassword() != null) {
+                        System.setProperty(protocol + ".proxyUser", proxy.getUsername());
+                        System.setProperty(protocol + ".proxyPassword", proxy.getPassword());
+                    }
+                    if (proxy.getNonProxyHosts() != null) {
+                        System.setProperty(protocol + ".nonProxyHosts", proxy.getNonProxyHosts());
+                    }
+                    System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+                }
+            }
         }
 
         try {
