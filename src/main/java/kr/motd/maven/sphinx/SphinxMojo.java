@@ -3,6 +3,7 @@ package kr.motd.maven.sphinx;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -163,26 +164,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             new File(sourceDirectory.getPath() + "/index.rst").setLastModified(System.currentTimeMillis());
         }
 
-
-        // Configure the proxy-related system properties.
-        if (session != null) {
-            final Proxy proxy = session.getSettings().getActiveProxy();
-            if (proxy != null) {
-                final String protocol = proxy.getProtocol();
-                if (protocol != null && protocol.length() > 0) {
-                    System.setProperty(protocol + ".proxyHost", proxy.getHost());
-                    System.setProperty(protocol + ".proxyPort", String.valueOf(proxy.getPort()));
-                    if (proxy.getUsername() != null && proxy.getPassword() != null) {
-                        System.setProperty(protocol + ".proxyUser", proxy.getUsername());
-                        System.setProperty(protocol + ".proxyPassword", proxy.getPassword());
-                    }
-                    if (proxy.getNonProxyHosts() != null) {
-                        System.setProperty(protocol + ".nonProxyHosts", proxy.getNonProxyHosts());
-                    }
-                    System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
-                }
-            }
-        }
+        configureProxy();
 
         try {
             final SphinxRunner sphinxRunner = new SphinxRunner(
@@ -221,6 +203,32 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             return directory.getCanonicalFile();
         } catch (IOException e) {
             throw new MojoExecutionException("failed to create a directory: " + directory, e);
+        }
+    }
+
+    private void configureProxy() {
+        if (session != null) {
+            final Proxy proxy = session.getSettings().getActiveProxy();
+            if (proxy != null && proxy.getProtocol() != null &&
+                proxy.getProtocol().toLowerCase().startsWith("http")) {
+                for (String protocol : Arrays.asList("http", "https")) {
+                    System.setProperty(protocol + ".proxyHost", proxy.getHost());
+                    System.setProperty(protocol + ".proxyPort", String.valueOf(proxy.getPort()));
+                    if (proxy.getUsername() != null && proxy.getPassword() != null) {
+                        System.setProperty(protocol + ".proxyUser", proxy.getUsername());
+                        System.setProperty(protocol + ".proxyPassword", proxy.getPassword());
+                    }
+                    if (proxy.getNonProxyHosts() != null) {
+                        System.setProperty(protocol + ".nonProxyHosts", proxy.getNonProxyHosts());
+                    }
+                }
+                if (System.getProperty("jdk.http.auth.tunneling.disabledSchemes") == null) {
+                    System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+                }
+                if (System.getProperty("https.protocols") == null) {
+                    System.setProperty("https.protocols", "TLSv1,TLSv1.1,TLSv1.2");
+                }
+            }
         }
     }
 
