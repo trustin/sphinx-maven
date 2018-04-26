@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>kr.motd.maven</groupId>
+    <artifactId>sphinx-maven-plugin-test</artifactId>
+    <packaging>pom</packaging>
+    <name>mojo test</name>
+    <description>Dummy documentation project</description>
+
+    <properties>
+        <sphinx-maven-plugin-version>2.2.1-SNAPSHOT</sphinx-maven-plugin-version>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>sphinx-maven-plugin</artifactId>
+                <version>${sphinx-maven-plugin-version}</version>
+                <configuration>
+                    <session implementation="kr.motd.maven.stubs.MavenSessionStub" />
+                    <sourceDirectory>src/site/sphinx</sourceDirectory>
+                    <outputDirectory>target/test-site</outputDirectory>
+                    <binaryCacheDir>target/cache</binaryCacheDir>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
