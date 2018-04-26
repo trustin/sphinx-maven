@@ -164,25 +164,30 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         }
 
 
-        // Configure the proxy-related system properties.
-        if (session != null) {
-            final Proxy proxy = session.getSettings().getActiveProxy();
-            if (proxy != null) {
-                final String protocol = proxy.getProtocol();
-                if (protocol != null && protocol.length() > 0) {
-                    System.setProperty(protocol + ".proxyHost", proxy.getHost());
-                    System.setProperty(protocol + ".proxyPort", String.valueOf(proxy.getPort()));
-                    if (proxy.getUsername() != null && proxy.getPassword() != null) {
-                        System.setProperty(protocol + ".proxyUser", proxy.getUsername());
-                        System.setProperty(protocol + ".proxyPassword", proxy.getPassword());
-                    }
-                    if (proxy.getNonProxyHosts() != null) {
-                        System.setProperty(protocol + ".nonProxyHosts", proxy.getNonProxyHosts());
-                    }
-                    System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
-                }
-            }
-        }
+		// Configure the proxy-related system properties.
+		if (session != null) {
+			final Proxy proxy = session.getSettings().getActiveProxy();
+			if (proxy != null && proxy.getProtocol() != null && proxy.getProtocol().toLowerCase().startsWith("http")) {
+				String[] protocols = { "http", "https" };
+				for (String protocol : protocols) {
+					System.setProperty(protocol + ".proxyHost", proxy.getHost());
+					System.setProperty(protocol + ".proxyPort", String.valueOf(proxy.getPort()));
+					if (proxy.getUsername() != null && proxy.getPassword() != null) {
+						System.setProperty(protocol + ".proxyUser", proxy.getUsername());
+						System.setProperty(protocol + ".proxyPassword", proxy.getPassword());
+					}
+					if (proxy.getNonProxyHosts() != null) {
+						System.setProperty(protocol + ".nonProxyHosts", proxy.getNonProxyHosts());
+					}
+				}
+				if (System.getProperty("jdk.http.auth.tunneling.disabledSchemes") == null) {
+					System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+				}
+				if (System.getProperty("https.protocols") == null) {
+					System.setProperty("https.protocols", "TLSv1,TLSv1.1,TLSv1.2");
+				}
+			}
+		}
 
         try {
             final SphinxRunner sphinxRunner = new SphinxRunner(
