@@ -1,9 +1,6 @@
 language: generic
 sudo: false
 dist: trusty
-os:
-  - linux
-  - osx
 cache:
   directories:
     - "$HOME/.m2/repository"

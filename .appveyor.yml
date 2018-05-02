@@ -1,11 +1,6 @@
 version: "{branch}.{build}"
 image:
   - "Visual Studio 2015"
-environment:
-  PATH: "C:\\msys64\\usr\\bin;%PATH%"
-  matrix:
-    - APPVEYOR_BITS: 32
-    - APPVEYOR_BITS: 64
 cache:
   - '%USERPROFILE%\.m2\repository'
   - '%USERPROFILE%\.m2\wrapper'
