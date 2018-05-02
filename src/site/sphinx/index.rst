@@ -2,14 +2,8 @@
 .. _`Sphinx`: http://www.sphinx-doc.org/
 .. _`reStructured Text`: http://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
 .. _`Markdown`: http://daringfireball.net/projects/markdown/
-.. _`PlantUML`: http://plantuml.sourceforge.net/
 .. _`Thomas Dudziak`: https://github.com/tomdz/sphinx-maven
 .. _`Bala Sridhar`: https://github.com/balasridhar/sphinx-maven
-.. _`sphinxcontrib-httpdomain`: https://sphinxcontrib-httpdomain.readthedocs.io/en/stable/
-.. _`sphinxcontrib-inlinesyntaxhighlight`: http://sphinxcontrib-inlinesyntaxhighlight.readthedocs.org/en/latest/
-.. _`sphinxcontrib-plantuml`: https://pypi.python.org/pypi/sphinxcontrib-plantuml
-.. _`recommonmark`: https://recommonmark.readthedocs.org/en/latest/
-.. _`javasphinx`: http://bronto.github.io/javasphinx/
 
 sphinx-maven-plugin
 ===================
@@ -25,11 +19,14 @@ Extensions
 ----------
 This plugin provides the following additional extensions out of the box:
 
-- `sphinxcontrib-httpdomain`_ - Sphinx domain for documenting HTTP APIs
-- `sphinxcontrib-plantuml`_ - enables embedding `PlantUML`_ diagrams
-- `sphinxcontrib-inlinesyntaxhighlight`_ - enables syntax-highlighting inline literals
-- `recommonmark`_ - adds Markdown support
-- `javasphinx`_ - adds the Java domain
+- `sphinxcontrib-httpdomain <https://sphinxcontrib-httpdomain.readthedocs.io/>`_
+- `sphinxcontrib-openapi <https://sphinxcontrib-openapi.readthedocs.io/>`_
+- `sphinxcontrib-plantuml <https://pypi.org/project/sphinxcontrib-plantuml/>`_
+- `sphinxcontrib-inlinesyntaxhighlight <https://sphinxcontrib-inlinesyntaxhighlight.readthedocs.io/>`_
+- `sphinxcontrib-redoc <https://sphinxcontrib-redoc.readthedocs.io/>`_
+- `sphinxcontrib-youtube <https://pypi.org/project/sphinxcontrib.youtube/>`_
+- `recommonmark <https://recommonmark.readthedocs.io/>`_
+- `javasphinx <http://javasphinx.readthedocs.io/>`_
 
 Themes
 ------
