@@ -87,7 +87,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
 
     /**
      * The base URL of the Sphinx binary, which will be used when downloading the Sphinx binary; must start
-     * with {@code http://} or {@code https://}.
+     * with {@code http://}, {@code https://} or {@code file://}.
      */
     @Parameter(property = "sphinx.binUrl", readonly = true)
     private String binaryUrl = SphinxRunner.DEFAULT_BINARY_URL;
