@@ -43,13 +43,9 @@ Simply add the sphinx-maven-plugin to your ``pom.xml``:
         <groupId>kr.motd.maven</groupId>
         <artifactId>sphinx-maven-plugin</artifactId>
         <version>\ |release|\ </version>
-        <reportSets>
-          <reportSet>
-            <reports>
-              <report>generate</report>
-            </reports>
-          </reportSet>
-        </reportSets>
+        <configuration>
+          <builder>html</builder>
+        </configuration>
       </plugin>
     </plugins>
   </reporting>
