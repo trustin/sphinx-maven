@@ -43,7 +43,7 @@ public class SphinxRunner {
     private static final OsDetector osDetector = new OsDetector();
 
     public static final String DEFAULT_BINARY_URL =
-            "https://github.com/trustin/sphinx-binary/releases/download/v0.3.1/sphinx." +
+            "https://github.com/trustin/sphinx-binary/releases/download/v0.4.0/sphinx." +
             osDetector.executableSuffix();
 
     private static final String VERSION;
