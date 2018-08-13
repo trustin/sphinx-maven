@@ -25,7 +25,7 @@ This plugin provides the following additional extensions out of the box:
 - `sphinxcontrib-inlinesyntaxhighlight <https://sphinxcontrib-inlinesyntaxhighlight.readthedocs.io/>`_
 - `sphinxcontrib-redoc <https://sphinxcontrib-redoc.readthedocs.io/>`_
 - `sphinxcontrib-youtube <https://pypi.org/project/sphinxcontrib.youtube/>`_
-- `recommonmark <https://recommonmark.readthedocs.io/>`_
+- `recommonmark <https://recommonmark.readthedocs.io/>`_ + `sphinx_markdown_tables <https://github.com/ryanfox/sphinx-markdown-tables>`_
 - `javasphinx <http://javasphinx.readthedocs.io/>`_
 
 Themes
