@@ -2,14 +2,12 @@
 {% set sticky_navigation = True %}
 {% set extra_css_files = ['_static/overrides.css'] %}
 {% block extrahead %}
-<script src="{{ pathto('_static/center_page.js', 1) }}"></script>
-{{ super() }}
+  <script src="https://cdn.jsdelivr.net/npm/interactjs@1.4.0-rc.3/dist/interact.min.js"></script>
+  <script src="{{ pathto('_static/center_page.js', 1) }}"></script>
+  {{ super() }}
 {% endblock %}
 {% block footer %}
-<div class="github-fork-ribbon-wrapper right">
-  <div class="github-fork-ribbon">
-    <a href="https://github.com/trustin/sphinx-maven-plugin">Fork me at GitHub</a>
-  </div>
-</div>
-{{ super() }}
+  <a class="github-fork-ribbon" href="https://github.com/line/armeria"
+    data-ribbon="Fork me on GitHub" title="Fork me on GitHub">Fork me on GitHub</a>
+  {{ super() }}
 {% endblock %}
