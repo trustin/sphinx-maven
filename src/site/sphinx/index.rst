@@ -27,7 +27,6 @@ This plugin provides the following additional extensions out of the box:
 - `sphinxcontrib-websupport <https://pypi.org/project/sphinxcontrib-websupport/>`_
 - `sphinxcontrib-youtube <https://pypi.org/project/sphinxcontrib.youtube/>`_
 - `recommonmark <https://recommonmark.readthedocs.io/>`_ + `sphinx_markdown_tables <https://github.com/ryanfox/sphinx-markdown-tables>`_
-- `javasphinx <http://javasphinx.readthedocs.io/>`_
 
 Themes
 ------
@@ -47,7 +46,7 @@ See `the GitHub releases page <https://github.com/trustin/sphinx-maven-plugin/re
 Credits
 -------
 This plugin was originally written by `Thomas Dudziak`_. `Bala Sridhar`_ since then upgraded Sphinx to 1.3.1
-and added PlantUML and JavaSphinx support in his fork. I'd like to appreciate their effort that did all the
+and added PlantUML support in his fork. I'd like to appreciate their effort that did all the
 heavy lifting.
 
 Read more
@@ -59,4 +58,4 @@ Read more
    configuration
    faq
    Release notes <https://github.com/trustin/sphinx-maven-plugin/releases>
-   Fork me at GitHub <https://github.com/trustin/sphinx-maven-plugin>
+   Fork me on GitHub <https://github.com/trustin/sphinx-maven-plugin>

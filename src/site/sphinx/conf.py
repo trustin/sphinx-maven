@@ -13,7 +13,7 @@ assert tags.has('tagBar')
 
 # Ensure we can load a YAML file.
 with open('test.yaml', 'r') as stream:
-    test_yaml = yaml.load(stream)
+    test_yaml = yaml.load(stream, Loader=yaml.FullLoader)
     assert test_yaml[0] == 'a'
     assert test_yaml[1] == 'b'
     assert test_yaml[2] == 'c'
@@ -29,7 +29,7 @@ master_doc = 'index'
 pygments_style = 'tango'
 add_function_parentheses = True
 
-extensions = ['sphinx.ext.autodoc', 'javasphinx', 'sphinxcontrib.httpdomain',
+extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.httpdomain',
               'sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.plantuml']
 
 templates_path = ['_templates']

@@ -49,7 +49,7 @@ documentation is given below:
   pygments_style = 'tango'
   add_function_parentheses = True
 
-  extensions = ['sphinx.ext.autodoc', 'javasphinx', 'sphinxcontrib.httpdomain',
+  extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.httpdomain',
                 'sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.plantuml',
                  'sphinxcontrib.scaladomain']
 
