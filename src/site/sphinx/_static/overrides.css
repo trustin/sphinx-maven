@@ -29,7 +29,6 @@ html, body, .wy-grid-for-nav {
   background: white;
   max-width: 960px;
   margin: 0;
-  touch-action: none;
 }
 
 .wy-nav-content p {
