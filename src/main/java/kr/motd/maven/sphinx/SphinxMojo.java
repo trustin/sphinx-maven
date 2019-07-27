@@ -131,6 +131,12 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private boolean verbose;
 
     /**
+     * Whether Sphinx should print full traceback on exception.
+     */
+    @Parameter(property = "sphinx.traceback", defaultValue = "true", required = true, alias = "traceback")
+    private boolean traceback;
+
+    /**
      * Whether Sphinx should treat warnings as errors.
      */
     @Parameter(property = "sphinx.warningAsErrors", defaultValue = "false", required = true, alias = "warningAsErrors")
@@ -332,6 +338,10 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             args.add("-v");
         } else {
             args.add("-Q");
+        }
+
+        if (traceback) {
+            args.add("-T");
         }
 
         if (warningsAsErrors) {

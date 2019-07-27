@@ -20,20 +20,21 @@ Extensions
 This plugin provides the following additional extensions out of the box:
 
 - `sphinxcontrib-httpdomain <https://sphinxcontrib-httpdomain.readthedocs.io/>`_
+- `sphinxcontrib-imagesvg <https://github.com/sphinx-contrib/imagesvg>`_
 - `sphinxcontrib-openapi <https://sphinxcontrib-openapi.readthedocs.io/>`_
 - `sphinxcontrib-plantuml <https://pypi.org/project/sphinxcontrib-plantuml/>`_
-- `sphinxcontrib-inlinesyntaxhighlight <https://sphinxcontrib-inlinesyntaxhighlight.readthedocs.io/>`_
 - `sphinxcontrib-redoc <https://sphinxcontrib-redoc.readthedocs.io/>`_
 - `sphinxcontrib-websupport <https://pypi.org/project/sphinxcontrib-websupport/>`_
-- `sphinxcontrib-youtube <https://pypi.org/project/sphinxcontrib.youtube/>`_
+- `sphinxcontrib-youtube <https://github.com/sphinx-contrib/youtube>`_
 - `recommonmark <https://recommonmark.readthedocs.io/>`_ + `sphinx_markdown_tables <https://github.com/ryanfox/sphinx-markdown-tables>`_
+- `sphinxemoji <https://github.com/sphinx-contrib/emojicodes>`_
 
 Themes
 ------
 This plugin provides the following additional themes out of the box:
 
 - `sphinx_bootstrap_theme <http://ryan-roemer.github.io/sphinx-bootstrap-theme/>`_
-- `sphinx_rtd_theme <https://sphinx-rtd-theme.readthedocs.io/en/latest/>`_
+- `sphinx_rtd_theme <https://sphinx-rtd-theme.readthedocs.io/>`_
 
 License
 -------

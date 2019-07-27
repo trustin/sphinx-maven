@@ -19,6 +19,7 @@ Parameter                Description                                            
 ``description``          The description of the report.                                                                    ``Documentation via sphinx``
 ``builder``              The builder to use. See `Available builders`_ for a list of possible builders.                    ``html``
 ``verbose``              Whether Sphinx should generate verbose output.                                                    ``true``
+``traceback``            Whether Sphinx should print full traceback on exception.                                          ``true``
 ``warningsAsErrors``     Whether warnings should be treated as errors.                                                     ``false``
 ``force``                Whether Sphinx should generate output for all files instead of only the changed ones.             ``false``
 ``tags``                 Additional tags to pass to Sphinx. See `Including content based on tags`_ for more information.
@@ -49,9 +50,7 @@ documentation is given below:
   pygments_style = 'tango'
   add_function_parentheses = True
 
-  extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.httpdomain',
-                'sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.plantuml',
-                 'sphinxcontrib.scaladomain']
+  extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
 
   templates_path = ['_templates']
   exclude_trees = ['.build']
