@@ -6,9 +6,9 @@ Configuration
 
 The ``sphinx-maven`` plugin has these configuration options:
 
-======================== ================================================================================================= ========================================
+======================== ================================================================================================= ==================================================
 Parameter                Description                                                                                       Default value
-======================== ================================================================================================= ========================================
+======================== ================================================================================================= ==================================================
 ``sourceDirectory``      The directory containing the documentation source.                                                ``${basedir}/src/site/sphinx``
 ``outputDirectory``      The directory where the generated output will be placed.                                          ``${project.reporting.outputDirectory}``
 ``binaryUrl``            The URL of the Sphinx executable binary. Must start with ``file:``, ``http:`` or ``https:``       <automatic>
@@ -25,7 +25,9 @@ Parameter                Description                                            
 ``tags``                 Additional tags to pass to Sphinx. See `Including content based on tags`_ for more information.
 ``asReport``             Whether documentation should be generated as a project report (keep default Maven site).          ``false``
 ``skip``                 Whether Sphinx execution should be skipped.                                                       ``false``
-======================== ================================================================================================= ========================================
+``useDoctreeCache``      Whether doctree cache should be used.                                                             ``false``
+``doctreeCacheDir``      The directory containing Sphinx doctree cache. Used only when ``useDoctreeCache`` is ``true``     ``${project.reporting.outputDirectory}/.doctrees``
+======================== ================================================================================================= ==================================================
 
 Sample Documentation Config
 ===========================

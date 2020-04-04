@@ -70,7 +70,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
             "images/icon_success_sml.gif",
             "images/icon_warning_sml.gif",
             "images/newwindow.png",
-            "images",
+            "images"
     };
 
     /**
@@ -82,32 +82,32 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     /**
      * Directory where reports will go.
      */
-    @Parameter(defaultValue = "${project.reporting.outputDirectory}", required = true, readonly = true)
+    @Parameter(defaultValue = "${project.reporting.outputDirectory}", required = true)
     private File outputDirectory;
 
     /**
      * The base URL of the Sphinx binary, which will be used when downloading the Sphinx binary; must start
      * with {@code http://}, {@code https://} or {@code file://}.
      */
-    @Parameter(property = "sphinx.binUrl", readonly = true)
+    @Parameter(property = "sphinx.binUrl")
     private String binaryUrl = SphinxRunner.DEFAULT_BINARY_URL;
 
     /**
      * The directory for Sphinx binary cache.
      */
-    @Parameter(property = "sphinx.binCacheDir", defaultValue = "${settings.localRepository}/kr/motd/maven/sphinx-binary", required = true, readonly = true)
+    @Parameter(property = "sphinx.binCacheDir", defaultValue = "${settings.localRepository}/kr/motd/maven/sphinx-binary", required = true)
     private File binaryCacheDir;
 
     /**
      * The environment variables to set when launching Sphinx.
      */
-    @Parameter(property = "sphinx.env", readonly = true)
+    @Parameter(property = "sphinx.env")
     private Map<String, String> environments = Collections.emptyMap();
 
     /**
      * The path to Graphviz {@code dot} binary.
      */
-    @Parameter(property = "sphinx.dotBin", readonly = true)
+    @Parameter(property = "sphinx.dotBin")
     private String dotBinary;
 
     /**
@@ -154,6 +154,19 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Parameter(property = "sphinx.skip", defaultValue = "false", required = true, alias = "skip")
     private boolean skip;
 
+    /**
+     * Whether Sphinx should use doctree cache.
+     */
+    @Parameter(property = "sphinx.useDoctreeCache", defaultValue = "false", required = true, alias = "useDocTreeCache")
+    private boolean useDoctreeCache;
+
+    /**
+     * The directory containing Sphinx doctree cache.
+     */
+    @Parameter(property = "sphinx.doctreeCacheDir", defaultValue = "${project.reporting.outputDirectory}/.doctrees", required = true, alias = "doctreeCacheDir")
+    private File doctreeCacheDir;
+
+
     @Override
     public void execute() throws MojoExecutionException {
         if (skip) {
@@ -164,6 +177,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         final File sourceDirectory = canonicalize(this.sourceDirectory);
         final File outputDirectory = getReportOutputDirectory();
         final File binaryCacheDir = canonicalize(this.binaryCacheDir);
+        final File doctreeCacheDir = useDoctreeCache ? canonicalize(this.doctreeCacheDir) : null;
 
         // to avoid Maven overriding resulting index.html, update index.rst to force re-building of index
         if (isHtmlReport()) {
@@ -184,7 +198,7 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
                     });
 
             getLog().info("Running Sphinx; output will be placed in " + outputDirectory);
-            final List<String> args = getSphinxRunnerCmdLine(sourceDirectory, outputDirectory);
+            final List<String> args = getSphinxRunnerCmdLine(sourceDirectory, outputDirectory, doctreeCacheDir);
             if (sphinxRunner.run(sourceDirectory, args) != 0) {
                 throw new MavenReportException("Sphinx report generation failed");
             }
@@ -331,8 +345,8 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     /**
      * Build the Sphinx Command line options.
      */
-    private List<String> getSphinxRunnerCmdLine(File sourceDirectory, File outputDirectory) {
-        List<String> args = new ArrayList<>();
+    private List<String> getSphinxRunnerCmdLine(File sourceDirectory, File outputDirectory, File doctreeCacheDir) {
+        final List<String> args = new ArrayList<>();
 
         if (verbose) {
             args.add("-v");
@@ -351,6 +365,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         if (force) {
             args.add("-a");
             args.add("-E");
+        }
+
+        if (doctreeCacheDir != null) {
+            args.add("-d");
+            args.add(doctreeCacheDir.getPath());
         }
 
         if (tags != null && !tags.isEmpty()) {

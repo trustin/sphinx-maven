@@ -20,8 +20,8 @@ with open('test.yaml', 'r') as stream:
 
 project = u'sphinx-maven-plugin'
 copyright = u'2016, Trustin Lee et al'
-version = '2.7'
-release = '2.7.0'
+version = '2.8'
+release = '2.8.0'
 
 # General options
 needs_sphinx = '1.0'
@@ -36,7 +36,7 @@ exclude_trees = ['.build']
 source_suffix = ['.rst', '.md']
 source_encoding = 'utf-8-sig'
 source_parsers = {
-  '.md': CommonMarkParser
+    '.md': CommonMarkParser
 }
 
 # HTML options
