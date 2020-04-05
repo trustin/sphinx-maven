@@ -166,6 +166,12 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     @Parameter(property = "sphinx.doctreeCacheDir", defaultValue = "${project.reporting.outputDirectory}/.doctrees", required = true, alias = "doctreeCacheDir")
     private File doctreeCacheDir;
 
+    /**
+     * Whether Sphinx should use 'make mode' ({@code -M} option) instead of 'build mode' ({@code -b} option).
+     */
+    @Parameter(property = "sphinx.useMakeMode", defaultValue = "false", required = true, alias = "useMakeMode")
+    private boolean useMakeMode;
+
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -348,6 +354,9 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private List<String> getSphinxRunnerCmdLine(File sourceDirectory, File outputDirectory, File doctreeCacheDir) {
         final List<String> args = new ArrayList<>();
 
+        args.add(useMakeMode ? "-M" : "-b");
+        args.add(builder);
+
         if (verbose) {
             args.add("-v");
         } else {
@@ -380,9 +389,6 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         }
 
         args.add("-n");
-
-        args.add("-b");
-        args.add(builder);
 
         args.add(sourceDirectory.getPath());
         args.add(outputDirectory.getPath());
