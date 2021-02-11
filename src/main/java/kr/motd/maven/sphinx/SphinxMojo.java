@@ -80,6 +80,12 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
     private File sourceDirectory;
 
     /**
+     * The directory containing the sphinx {@code conf.py} file.
+     */
+    @Parameter(property = "sphinx.cfgDir")
+    private File configDirectory;
+
+    /**
      * Directory where reports will go.
      */
     @Parameter(defaultValue = "${project.reporting.outputDirectory}", required = true)
@@ -374,6 +380,11 @@ public class SphinxMojo extends AbstractMojo implements MavenReport {
         if (force) {
             args.add("-a");
             args.add("-E");
+        }
+
+        if (configDirectory != null) {
+            args.add("-c");
+            args.add(configDirectory.getPath());
         }
 
         if (doctreeCacheDir != null) {

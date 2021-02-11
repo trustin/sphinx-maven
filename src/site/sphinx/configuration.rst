@@ -10,6 +10,7 @@ The ``sphinx-maven`` plugin has these configuration options:
 Parameter                Description                                                                                       Default value
 ======================== ================================================================================================= ==================================================
 ``sourceDirectory``      The directory containing the documentation source.                                                ``${basedir}/src/site/sphinx``
+``configDirectory``      The directory containing the ``conf.py`` file.
 ``outputDirectory``      The directory where the generated output will be placed.                                          ``${project.reporting.outputDirectory}``
 ``binaryUrl``            The URL of the Sphinx executable binary. Must start with ``file:``, ``http:`` or ``https:``       <automatic>
 ``environments``         The environment variables to set when launching Sphinx. e.g. ``<VAR1>x</VAR1><VAR2>y</VAR2>``
@@ -40,7 +41,6 @@ documentation is given below:
 
   # -*- coding: utf-8 -*-
   import sys, os
-  from recommonmark.parser import CommonMarkParser
 
   project = u'My Project'
   copyright = u'YYYY, John Doe'
@@ -53,15 +53,11 @@ documentation is given below:
   pygments_style = 'tango'
   add_function_parentheses = True
 
-  extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
+  extensions = ['recommonmark', 'sphinx.ext.autodoc', 'sphinxcontrib.plantuml']
 
   templates_path = ['_templates']
   exclude_trees = ['.build']
-  source_suffix = ['.rst', '.md']
   source_encoding = 'utf-8-sig'
-  source_parsers = {
-    '.md': CommonMarkParser
-  }
 
   # HTML options
   html_theme = 'sphinx_rtd_theme'
